@@ -27,6 +27,39 @@ export function closeCardMenu(): void {
   menu.textContent = '';
 }
 
+function getMenuItems(menu: HTMLElement): HTMLButtonElement[] {
+  return Array.from(menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+}
+
+function handleMenuKeydown(event: KeyboardEvent, menu: HTMLElement): void {
+  const items = getMenuItems(menu);
+  if (items.length === 0) return;
+
+  const current = document.activeElement as HTMLButtonElement | null;
+  const currentIndex = current ? items.indexOf(current) : -1;
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+    items[next]?.focus();
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    const prev = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+    items[prev]?.focus();
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    items[0]?.focus();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    items[items.length - 1]?.focus();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    closeCardMenu();
+  } else if (event.key === 'Tab') {
+    closeCardMenu();
+  }
+}
+
 function appendMenuButton(
   menu: HTMLElement,
   label: string,
@@ -84,6 +117,8 @@ export function showCardMenu(
     closeCardMenu();
     await copyText(cardSummaryText(card, index), `已复制摘要 #${index + 1}`, deps.setStatus);
   });
+
+  menu.onkeydown = (event) => handleMenuKeydown(event, menu);
 
   positionCardMenu(menu, clientX, clientY);
   menu.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });

@@ -14,7 +14,7 @@ import {
 import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
 import { $, errorMessage } from './sidepanel/dom';
 import { showCardMenu, closeCardMenu } from './sidepanel/menu';
-import { renderCard } from './sidepanel/card-view';
+import { renderCard, setActiveCard } from './sidepanel/card-view';
 import { loadSettings, saveSettings, bindSettingsForm } from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
@@ -223,7 +223,12 @@ async function highlightCardAnchor(
   const r = (await sendToTab(page.tabId, { type: 'highlight', anchor }, page.url)) as {
     ok?: boolean;
   };
-  setStatus(r?.ok ? `已高亮 #${index + 1}` : `定位失败 #${index + 1}`);
+  if (r?.ok) {
+    setActiveCard(index);
+    setStatus(`已高亮 #${index + 1}`);
+  } else {
+    setStatus(`定位失败 #${index + 1}`);
+  }
 }
 
 
