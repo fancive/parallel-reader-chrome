@@ -1,0 +1,18 @@
+schema_version: "2.0"
+
+required_risk_tags:
+  - boundary_io
+  - wiring
+  - failure_path
+  - security
+  - resource_lifecycle
+  - regression
+  - contract
+
+preconditions:
+  - name: chrome_available
+    check: "node scripts/e2e-extension-smoke.mjs --check-browser"
+    remediation: "Install Google Chrome or set PLAYWRIGHT_CHROME_CHANNEL / CHROME_PATH for the e2e extension smoke."
+
+provenance:
+  cosign_required: false

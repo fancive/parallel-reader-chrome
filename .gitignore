@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.tmp/
+.agent/
+reports/
+.e2e/artifact.json
+.e2e/artifact.json.sig
+.e2e/evidence/
+
+.DS_Store
+*.log

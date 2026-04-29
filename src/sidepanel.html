@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Parallel Reader</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <section id="action" class="action-panel">
+      <div class="action-copy">
+        <div class="eyebrow">Now reading</div>
+        <p id="status" aria-live="polite">未开始</p>
+      </div>
+      <div class="action-controls">
+        <label class="debug-toggle" title="显示抽取和定位诊断">
+          <input id="debug-mode" type="checkbox" />
+          <span>调试</span>
+        </label>
+        <button id="settings-toggle" class="icon-button" type="button" aria-label="设置" title="设置">⚙</button>
+        <button id="analyze" class="primary-action" type="button">分析当前页</button>
+      </div>
+    </section>
+
+    <section id="settings" class="settings-panel" hidden>
+      <p class="settings-note">
+        本地模式：API Key 只保存在当前 Chrome。公开发布前需要改为后端或临时凭证方案。
+      </p>
+      <label>API Key
+        <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
+      </label>
+      <label>Base URL
+        <input id="base-url" type="text" />
+      </label>
+      <label>Model
+        <input id="model" type="text" />
+      </label>
+      <label>Cards 数量
+        <span class="row">
+          <input id="min-cards" type="number" min="1" />
+          <span>—</span>
+          <input id="max-cards" type="number" min="1" />
+        </span>
+      </label>
+      <label>摘要语言
+        <select id="summary-language">
+          <option value="zh-CN">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label>信息密度
+        <select id="card-density">
+          <option value="concise">精简</option>
+          <option value="normal">标准</option>
+          <option value="detailed">详细</option>
+        </select>
+      </label>
+      <label>截断字数
+        <input id="max-doc" type="number" min="500" step="500" />
+      </label>
+      <button id="settings-save" type="button">保存</button>
+    </section>
+
+    <section id="meta" class="page-state" hidden>
+      <div class="page-title-row">
+        <span class="meta-label">Page</span>
+        <span id="meta-title"></span>
+      </div>
+      <div class="page-url" id="meta-url"></div>
+      <div class="metric-strip">
+        <div class="meta-row"><span class="meta-label">Text</span><span id="meta-selected-len"></span></div>
+        <div class="meta-row"><span class="meta-label">Source</span><span id="meta-used"></span></div>
+      </div>
+      <div id="meta-quality" class="meta-quality" hidden></div>
+    </section>
+
+    <details id="stats" class="diagnostics debug-only" hidden>
+      <summary>阅读诊断</summary>
+      <div class="diagnostic-grid">
+        <div class="stat"><span class="stat-label">原文长度</span><span id="meta-raw-len"></span></div>
+        <div class="stat"><span class="stat-label">正文长度</span><span id="meta-read-len"></span></div>
+        <div class="stat"><span class="stat-label">原文匹配</span><span id="stat-raw"></span></div>
+        <div class="stat"><span class="stat-label">正文匹配</span><span id="stat-read"></span></div>
+        <div class="stat"><span class="stat-label">页面定位</span><span id="stat-dom"></span></div>
+      </div>
+    </details>
+
+    <section id="cards"></section>
+    <div id="card-menu" class="card-menu" role="menu" aria-label="卡片操作" hidden></div>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
