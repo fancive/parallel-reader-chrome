@@ -16,6 +16,7 @@ import { $, errorMessage } from './sidepanel/dom';
 import { showCardMenu, closeCardMenu } from './sidepanel/menu';
 import { renderCard, setActiveCard } from './sidepanel/card-view';
 import { loadSettings, saveSettings, bindSettingsForm } from './sidepanel/settings-form';
+import { runWithConcurrency, debounce } from './sidepanel/concurrency';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
 
@@ -319,19 +320,32 @@ async function refreshCurrentPage(): Promise<void> {
   }
 }
 
+const LOCATE_CONCURRENCY = 4;
+
+const FAILED_LOCATE: LocateResponse = {
+  rawHit: false,
+  readabilityHit: false,
+  domRange: false,
+  rawIndex: -1,
+  readabilityIndex: -1,
+};
+
 async function locateAll(
   page: Readonly<PageIdentity>,
   cards: readonly Card[],
 ): Promise<readonly CardResult[]> {
-  const results: CardResult[] = [];
-  for (const card of cards) {
+  const settled = await runWithConcurrency(cards, LOCATE_CONCURRENCY, async (card) => {
     const locate = (await sendToTab(page.tabId, {
       type: 'locate',
       anchor: card.anchor,
     }, page.url)) as LocateResponse;
-    results.push({ card, locate });
-  }
-  return results;
+    return { card, locate };
+  });
+  return settled.map((result, i) =>
+    result.status === 'fulfilled'
+      ? result.value
+      : { card: cards[i] as Card, locate: FAILED_LOCATE },
+  );
 }
 
 async function runAnalysis(): Promise<void> {
@@ -391,16 +405,19 @@ async function init(): Promise<void> {
   bindSettingsForm(settings, { setStatus, saveSettings });
   bindDebugMode(debugMode);
   updateAnalyzeButton();
+
+  const debouncedRefresh = debounce(() => void refreshCurrentPage(), 120);
+
   $('analyze').addEventListener('click', () => {
     void runAnalysis();
   });
   chrome.tabs.onActivated.addListener(() => {
-    void refreshCurrentPage();
+    debouncedRefresh();
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (currentPage?.tabId !== tabId) return;
     if (changeInfo.url || changeInfo.status === 'complete') {
-      void refreshCurrentPage();
+      debouncedRefresh();
     }
     if (changeInfo.status === 'loading') {
       clearRenderedPage();
@@ -408,10 +425,10 @@ async function init(): Promise<void> {
     }
   });
   chrome.windows.onFocusChanged.addListener(() => {
-    void refreshCurrentPage();
+    debouncedRefresh();
   });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) void refreshCurrentPage();
+    if (!document.hidden) debouncedRefresh();
   });
   document.addEventListener('click', (event) => {
     if ($('card-menu').contains(event.target as Node)) return;
