@@ -19,6 +19,9 @@ import { closeCardMenu, showCardMenu } from './sidepanel/menu';
 import { bindSettingsForm, loadSettings, saveSettings } from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
+const THEME_KEY = 'parallel-reader-theme';
+const THEMES = ['paper', 'dark', 'cloud'] as const;
+type Theme = (typeof THEMES)[number];
 const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
 const PENDING_ANALYZE_TTL_MS = 5_000;
 
@@ -69,6 +72,31 @@ function applyDebugMode(enabled: boolean): void {
   $<HTMLInputElement>('debug-mode').checked = enabled;
   const stats = $<HTMLDetailsElement>('stats');
   if (enabled && !stats.hidden) stats.open = true;
+}
+
+async function loadTheme(): Promise<Theme> {
+  const stored = await chrome.storage.local.get(THEME_KEY);
+  const value = (stored as Record<string, unknown>)[THEME_KEY];
+  return THEMES.includes(value as Theme) ? (value as Theme) : 'paper';
+}
+
+async function saveTheme(theme: Theme): Promise<void> {
+  await chrome.storage.local.set({ [THEME_KEY]: theme });
+}
+
+function applyTheme(theme: Theme): void {
+  document.body.dataset.theme = theme;
+  $<HTMLSelectElement>('theme-select').value = theme;
+}
+
+function bindTheme(initial: Theme): void {
+  applyTheme(initial);
+  $<HTMLSelectElement>('theme-select').addEventListener('change', async (event) => {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    const next: Theme = THEMES.includes(value as Theme) ? (value as Theme) : 'paper';
+    applyTheme(next);
+    await saveTheme(next);
+  });
 }
 
 function bindDebugMode(initial: boolean): void {
@@ -457,8 +485,13 @@ async function consumePendingAnalyze(): Promise<boolean> {
 }
 
 async function init(): Promise<void> {
-  const [settings, debugMode] = await Promise.all([loadSettings(), loadDebugMode()]);
+  const [settings, debugMode, theme] = await Promise.all([
+    loadSettings(),
+    loadDebugMode(),
+    loadTheme(),
+  ]);
   bindSettingsForm(settings, { setStatus, saveSettings });
+  bindTheme(theme);
   bindDebugMode(debugMode);
   updateAnalyzeButton();
   void syncZoomFromActiveTab();

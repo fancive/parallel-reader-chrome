@@ -12,6 +12,14 @@
         <p id="status" aria-live="polite">未开始</p>
       </div>
       <div class="action-controls">
+        <label class="theme-picker" title="切换界面风格">
+          <span class="theme-picker-label" aria-hidden="true">风格</span>
+          <select id="theme-select" aria-label="界面风格">
+            <option value="paper">纸本</option>
+            <option value="dark">深色</option>
+            <option value="cloud">云端</option>
+          </select>
+        </label>
         <label class="debug-toggle" title="显示抽取和定位诊断">
           <input id="debug-mode" type="checkbox" />
           <span>调试</span>
