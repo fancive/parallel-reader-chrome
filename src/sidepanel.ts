@@ -14,14 +14,10 @@ import {
   type ExtractedTextVersion,
 } from './shared/extraction-quality';
 import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
+import { $, escapeHtml, errorMessage } from './sidepanel/dom';
+import { copyText } from './sidepanel/clipboard';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
-
-const $ = <T extends HTMLElement>(id: string): T => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`element #${id} not found`);
-  return el as T;
-};
 
 async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): Promise<T> {
   try {
@@ -31,10 +27,6 @@ async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): 
     await injectContentScript(tabId, pageUrl);
     return (await chrome.tabs.sendMessage(tabId, message)) as T;
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function isMissingContentScriptError(error: unknown): boolean {
@@ -158,41 +150,6 @@ function fmtPct(hits: number, total: number): string {
   return `${hits}/${total} (${Math.round((hits / total) * 100)}%)`;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function fallbackCopyText(text: string): void {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.top = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  const ok = document.execCommand('copy');
-  textarea.remove();
-  if (!ok) throw new Error('浏览器拒绝写入剪贴板');
-}
-
-async function copyText(text: string, okStatus: string): Promise<void> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      fallbackCopyText(text);
-    }
-    setStatus(okStatus);
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(`复制失败: ${msg}`);
-  }
-}
 
 function cardSummaryText(card: Readonly<Card>, index: number): string {
   const bullets = card.bullets.map((bullet) => `- ${bullet}`);
@@ -384,11 +341,11 @@ function showCardMenu(
   );
   appendMenuButton(menu, '复制引用', false, async () => {
     closeCardMenu();
-    await copyText(card.anchor, `已复制引用 #${index + 1}`);
+    await copyText(card.anchor, `已复制引用 #${index + 1}`, setStatus);
   });
   appendMenuButton(menu, '复制摘要', false, async () => {
     closeCardMenu();
-    await copyText(cardSummaryText(card, index), `已复制摘要 #${index + 1}`);
+    await copyText(cardSummaryText(card, index), `已复制摘要 #${index + 1}`, setStatus);
   });
 
   positionCardMenu(menu, clientX, clientY);
