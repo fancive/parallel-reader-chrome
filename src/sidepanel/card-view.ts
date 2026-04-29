@@ -2,6 +2,20 @@ import type { Card, LocateResponse } from '../shared/types';
 
 type CardResult = { card: Card; locate: LocateResponse };
 
+export function cardClassName(canHighlight: boolean): string {
+  return canHighlight ? 'card' : 'card miss';
+}
+
+export function cardAriaLabel(index: number, canHighlight: boolean): string {
+  return canHighlight
+    ? `高亮定位第 ${index + 1} 张卡片`
+    : `第 ${index + 1} 张卡片暂时无法定位`;
+}
+
+export function cardTitleAttr(canHighlight: boolean): string {
+  return canHighlight ? '点击高亮定位，右键查看更多操作' : '右键查看更多操作';
+}
+
 export type CardViewDeps = {
   highlightCardAnchor: (anchor: string, index: number, canHighlight: boolean) => Promise<void>;
   showCardMenu: (

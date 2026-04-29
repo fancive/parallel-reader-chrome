@@ -27,9 +27,9 @@ export function debounce<A extends unknown[]>(
   fn: (...args: A) => void,
   ms: number,
 ): (...args: A) => void {
-  let timer = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return (...args: A) => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), ms);
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
   };
 }
