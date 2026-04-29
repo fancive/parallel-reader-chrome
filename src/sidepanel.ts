@@ -1,22 +1,22 @@
 import {
+  assessExtractionQuality,
+  type ExtractedTextVersion,
+  selectExtractedTextVersion,
+} from './shared/extraction-quality';
+import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
+import {
   type AnalyzeResponse,
   type Card,
   type ExtractResponse,
   type LocateResponse,
-  type ProviderSettings,
   PAGE_STATE_PREFIX,
+  type ProviderSettings,
 } from './shared/types';
-import {
-  assessExtractionQuality,
-  selectExtractedTextVersion,
-  type ExtractedTextVersion,
-} from './shared/extraction-quality';
-import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
-import { $, errorMessage } from './sidepanel/dom';
-import { showCardMenu, closeCardMenu } from './sidepanel/menu';
 import { renderCard, setActiveCard } from './sidepanel/card-view';
-import { loadSettings, saveSettings, bindSettingsForm } from './sidepanel/settings-form';
-import { runWithConcurrency, debounce } from './sidepanel/concurrency';
+import { debounce, runWithConcurrency } from './sidepanel/concurrency';
+import { $, errorMessage } from './sidepanel/dom';
+import { closeCardMenu, showCardMenu } from './sidepanel/menu';
+import { bindSettingsForm, loadSettings, saveSettings } from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
 
@@ -205,6 +205,10 @@ function setAnalyzeBusy(busy: boolean): void {
   updateAnalyzeButton();
 }
 
+function invalidatePendingRender(): void {
+  renderVersion++;
+}
+
 async function highlightCardAnchor(
   anchor: string,
   index: number,
@@ -322,30 +326,48 @@ async function refreshCurrentPage(): Promise<void> {
 
 const LOCATE_CONCURRENCY = 4;
 
-const FAILED_LOCATE: LocateResponse = {
-  rawHit: false,
-  readabilityHit: false,
-  domRange: false,
-  rawIndex: -1,
-  readabilityIndex: -1,
-};
+function isLocateResponse(value: unknown): value is LocateResponse {
+  if (typeof value !== 'object' || value === null) return false;
+  const locate = value as Partial<LocateResponse>;
+  return (
+    typeof locate.rawHit === 'boolean' &&
+    typeof locate.readabilityHit === 'boolean' &&
+    typeof locate.domRange === 'boolean' &&
+    typeof locate.rawIndex === 'number' &&
+    typeof locate.readabilityIndex === 'number'
+  );
+}
+
+function invalidLocateMessage(value: unknown): string {
+  if (typeof value === 'object' && value !== null && 'error' in value) {
+    return errorMessage((value as { error?: unknown }).error);
+  }
+  return 'content script returned an invalid locate response';
+}
 
 async function locateAll(
   page: Readonly<PageIdentity>,
   cards: readonly Card[],
 ): Promise<readonly CardResult[]> {
   const settled = await runWithConcurrency(cards, LOCATE_CONCURRENCY, async (card) => {
-    const locate = (await sendToTab(page.tabId, {
+    const locate = await sendToTab<unknown>(page.tabId, {
       type: 'locate',
       anchor: card.anchor,
-    }, page.url)) as LocateResponse;
+    }, page.url);
+    if (!isLocateResponse(locate)) {
+      throw new Error(invalidLocateMessage(locate));
+    }
     return { card, locate };
   });
-  return settled.map((result, i) =>
-    result.status === 'fulfilled'
-      ? result.value
-      : { card: cards[i] as Card, locate: FAILED_LOCATE },
-  );
+
+  const results: CardResult[] = [];
+  for (const [index, result] of settled.entries()) {
+    if (result.status === 'rejected') {
+      throw new Error(`定位第 ${index + 1} 张卡片失败: ${errorMessage(result.reason)}`);
+    }
+    results.push(result.value);
+  }
+  return results;
 }
 
 async function runAnalysis(): Promise<void> {
@@ -387,6 +409,7 @@ async function runAnalysis(): Promise<void> {
       results,
       analyzedAt: Date.now(),
     };
+    if (version !== renderVersion || currentPage?.key !== page.key) return;
     await savePageState(state);
     if (version === renderVersion && currentPage?.key === page.key) {
       renderPageState(state);
@@ -416,6 +439,9 @@ async function init(): Promise<void> {
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (currentPage?.tabId !== tabId) return;
+    if (changeInfo.url || changeInfo.status === 'loading' || changeInfo.status === 'complete') {
+      invalidatePendingRender();
+    }
     if (changeInfo.url || changeInfo.status === 'complete') {
       debouncedRefresh();
     }
