@@ -14,8 +14,9 @@ import {
   type ExtractedTextVersion,
 } from './shared/extraction-quality';
 import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
-import { $, escapeHtml, errorMessage } from './sidepanel/dom';
+import { $, errorMessage } from './sidepanel/dom';
 import { showCardMenu, closeCardMenu } from './sidepanel/menu';
+import { renderCard } from './sidepanel/card-view';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
 
@@ -275,64 +276,16 @@ async function highlightCardAnchor(
 }
 
 
-function renderCard(result: CardResult, index: number): HTMLElement {
-  const { card, locate } = result;
-  const canHighlight = locate.domRange;
-  const el = document.createElement('div');
-  el.className = `card${canHighlight ? '' : ' miss'}`;
-  el.tabIndex = 0;
-  el.role = 'button';
-  el.ariaLabel = canHighlight
-    ? `高亮定位第 ${index + 1} 张卡片`
-    : `第 ${index + 1} 张卡片暂时无法定位`;
-  el.title = canHighlight ? '点击高亮定位，右键查看更多操作' : '右键查看更多操作';
-
-  const bullets = card.bullets
-    .map((b) => `<li>${escapeHtml(b)}</li>`)
-    .join('');
-
-  const badge = (label: string, hit: boolean) =>
-    `<span class="badge ${hit ? 'hit' : 'miss'}">${label} ${hit ? '✓' : '✗'}</span>`;
-
-  el.innerHTML = `
-    <div class="card-head">
-      <div class="card-title">${index + 1}. ${escapeHtml(card.title)}</div>
-      <div class="card-badges debug-only">
-        ${badge('原文', locate.rawHit)}
-        ${badge('正文', locate.readabilityHit)}
-        ${badge('定位', locate.domRange)}
-      </div>
-    </div>
-    <div class="card-anchor">${escapeHtml(card.anchor)}</div>
-    <div class="card-gist">${escapeHtml(card.gist)}</div>
-    <ul class="card-bullets">${bullets}</ul>
-  `;
-
-  el.addEventListener('click', () => {
-    void highlightCardAnchor(card.anchor, index, canHighlight);
-  });
-
-  const menuDeps = { highlightCardAnchor, setStatus };
-
-  el.addEventListener('contextmenu', (event) => {
-    event.preventDefault();
-    showCardMenu(result, index, event.clientX, event.clientY, menuDeps);
-  });
-
-  el.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      void highlightCardAnchor(card.anchor, index, canHighlight);
-      return;
-    }
-    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-      event.preventDefault();
-      const rect = el.getBoundingClientRect();
-      showCardMenu(result, index, rect.left + 28, rect.top + 28, menuDeps);
-    }
-  });
-
-  return el;
+function makeCardDeps() {
+  return {
+    highlightCardAnchor,
+    showCardMenu: (
+      result: Readonly<CardResult>,
+      index: number,
+      clientX: number,
+      clientY: number,
+    ) => showCardMenu(result, index, clientX, clientY, { highlightCardAnchor, setStatus }),
+  };
 }
 
 function renderMeta(meta: Readonly<PageMeta>, used: ExtractedTextVersion): void {
@@ -376,8 +329,9 @@ function renderPageState(state: PageState): void {
   renderMeta(state.meta, state.usedText);
   const container = $('cards');
   container.textContent = '';
+  const cardDeps = makeCardDeps();
   state.results.forEach((r, i) => {
-    container.appendChild(renderCard(r, i));
+    container.appendChild(renderCard(r, i, cardDeps));
   });
   renderStats(state.results);
   setCurrentHasSavedResults(true);
