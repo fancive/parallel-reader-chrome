@@ -7,6 +7,7 @@ import {
   PAGE_STATE_PREFIX,
   SETTINGS_KEY,
 } from './shared/types';
+import { logWarn } from './shared/logger';
 
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
@@ -19,7 +20,7 @@ async function loadSettings() {
   const raw = (stored as Record<string, unknown>)[SETTINGS_KEY];
   const parsed = ProviderSettingsSchema.safeParse(raw ?? {});
   if (parsed.success) return parsed.data;
-  console.warn('[parallel-reader] invalid stored settings; using defaults', parsed.error);
+  logWarn('invalid stored settings; using defaults', parsed.error);
   return ProviderSettingsSchema.parse({});
 }
 
@@ -58,6 +59,6 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void removePageStatesForTab(tabId).catch((error) => {
-    console.warn('[parallel-reader] failed to cleanup page state', error);
+    logWarn('failed to cleanup page state', error);
   });
 });

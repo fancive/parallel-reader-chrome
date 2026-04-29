@@ -8,6 +8,7 @@ import type {
   LocateRequest,
   LocateResponse,
 } from './shared/types';
+import { logWarn } from './shared/logger';
 
 const HIGHLIGHT_STYLE_ID = 'parallel-reader-highlight-style';
 const OVERLAY_ID = 'parallel-reader-overlay-spike';
@@ -35,7 +36,7 @@ function extractReadabilityText(): string {
     const textContent = article.textContent ?? '';
     return textContent.replace(/ /g, ' ').trim();
   } catch (error) {
-    console.warn('[parallel-reader] Readability failed', error);
+    logWarn('Readability failed', error);
     return '';
   }
 }

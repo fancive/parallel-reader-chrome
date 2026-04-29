@@ -1,12 +1,13 @@
 import { ProviderSettingsSchema, type ProviderSettings, SETTINGS_KEY } from '../shared/types';
 import { $ } from './dom';
+import { logWarn } from '../shared/logger';
 
 export async function loadSettings(): Promise<ProviderSettings> {
   const stored = await chrome.storage.local.get(SETTINGS_KEY);
   const raw = (stored as Record<string, unknown>)[SETTINGS_KEY];
   const parsed = ProviderSettingsSchema.safeParse(raw ?? {});
   if (parsed.success) return parsed.data;
-  console.warn('[parallel-reader] invalid stored settings; using defaults', parsed.error);
+  logWarn('invalid stored settings; using defaults', parsed.error);
   return ProviderSettingsSchema.parse({});
 }
 
