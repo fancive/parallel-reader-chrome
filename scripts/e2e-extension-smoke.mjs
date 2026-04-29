@@ -196,10 +196,16 @@ async function launchExtension() {
   await waitForExtensionId();
 }
 
+const ANALYZE_TRIGGER_SELECTOR = '#analyze:visible, #analyze-hero:visible';
+
+function analyzeTrigger() {
+  return sidePage.locator(ANALYZE_TRIGGER_SELECTOR).first();
+}
+
 async function openSidePanelPage() {
   sidePage = await context.newPage();
   await sidePage.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-  await sidePage.waitForSelector('#analyze', { timeout: 5000 });
+  await analyzeTrigger().waitFor({ state: 'visible', timeout: 5000 });
 }
 
 async function activeTabExtract() {
@@ -235,12 +241,16 @@ async function main() {
 
   await record('side panel blocks analysis until provider settings exist', ['risk:failure_path', 'risk:security'], async () => {
     await openSidePanelPage();
-    await sidePage.locator('#analyze').click();
-    await sidePage.waitForFunction(() => {
-      const settings = document.querySelector('#settings');
-      const status = document.querySelector('#status');
-      return settings && settings.hidden === false && status?.textContent?.includes('请先保存 API Key');
-    });
+    await analyzeTrigger().click({ timeout: 5000 });
+    await sidePage.waitForFunction(
+      () => {
+        const settings = document.querySelector('#settings');
+        const status = document.querySelector('#status');
+        return settings && settings.hidden === false && status?.textContent?.includes('请先保存 API Key');
+      },
+      null,
+      { timeout: 5000 },
+    );
     const note = await sidePage.locator('.settings-note').textContent();
     assert(
       note?.includes('API Key 只保存在当前 Chrome'),

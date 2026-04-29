@@ -21,6 +21,11 @@
       </div>
     </section>
 
+    <button id="analyze-hero" class="hero-action" type="button" hidden>
+      <span class="hero-action-label">分析当前页</span>
+      <span class="hero-action-hint">快捷键 Alt+Shift+R</span>
+    </button>
+
     <section id="settings" class="settings-panel" hidden>
       <p class="settings-note">
         本地模式：API Key 只保存在当前 Chrome。公开发布前需要改为后端或临时凭证方案。
@@ -67,11 +72,11 @@
         <span id="meta-title"></span>
       </div>
       <div class="page-url" id="meta-url"></div>
-      <div class="metric-strip">
+      <div class="metric-strip debug-only">
         <div class="meta-row"><span class="meta-label">Text</span><span id="meta-selected-len"></span></div>
         <div class="meta-row"><span class="meta-label">Source</span><span id="meta-used"></span></div>
       </div>
-      <div id="meta-quality" class="meta-quality" hidden></div>
+      <div id="meta-quality" class="meta-quality debug-only" hidden></div>
     </section>
 
     <details id="stats" class="diagnostics debug-only" hidden>

@@ -19,6 +19,8 @@ import { closeCardMenu, showCardMenu } from './sidepanel/menu';
 import { bindSettingsForm, loadSettings, saveSettings } from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
+const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
+const PENDING_ANALYZE_TTL_MS = 5_000;
 
 async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): Promise<T> {
   try {
@@ -183,7 +185,10 @@ function pageMetaFromExtracted(extracted: Readonly<ExtractResponse>): PageMeta {
 
 function updateAnalyzeButton(): void {
   const button = $<HTMLButtonElement>('analyze');
+  const hero = $<HTMLButtonElement>('analyze-hero');
+  const heroLabel = hero.querySelector<HTMLElement>('.hero-action-label');
   button.disabled = analyzeBusy;
+  hero.disabled = analyzeBusy;
   button.textContent = analyzeBusy
     ? currentHasSavedResults
       ? '重新分析中...'
@@ -193,6 +198,10 @@ function updateAnalyzeButton(): void {
       : '分析当前页';
   button.title =
     currentHasSavedResults && !analyzeBusy ? '重新抽取当前页并替换已保存结果' : '';
+  if (heroLabel) heroLabel.textContent = analyzeBusy ? '分析中...' : '分析当前页';
+  const showHero = !currentHasSavedResults;
+  hero.hidden = !showHero;
+  button.hidden = showHero;
 }
 
 function setCurrentHasSavedResults(hasSavedResults: boolean): void {
@@ -423,19 +432,64 @@ async function runAnalysis(): Promise<void> {
   }
 }
 
+function applyZoom(factor: number): void {
+  const safe = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  document.body.style.setProperty('--page-zoom', String(safe));
+}
+
+async function syncZoomFromActiveTab(): Promise<void> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (typeof tab?.id !== 'number') return;
+    const factor = await chrome.tabs.getZoom(tab.id);
+    applyZoom(factor);
+  } catch {
+    // tab may not be queryable (restricted page); leave zoom at default
+  }
+}
+
+async function consumePendingAnalyze(): Promise<boolean> {
+  const stored = await pageStorage.get(PENDING_ANALYZE_KEY);
+  const ts = (stored as Record<string, unknown>)[PENDING_ANALYZE_KEY];
+  if (typeof ts !== 'number') return false;
+  await pageStorage.remove(PENDING_ANALYZE_KEY);
+  return Date.now() - ts <= PENDING_ANALYZE_TTL_MS;
+}
+
 async function init(): Promise<void> {
   const [settings, debugMode] = await Promise.all([loadSettings(), loadDebugMode()]);
   bindSettingsForm(settings, { setStatus, saveSettings });
   bindDebugMode(debugMode);
   updateAnalyzeButton();
+  void syncZoomFromActiveTab();
 
   const debouncedRefresh = debounce(() => void refreshCurrentPage(), 120);
 
   $('analyze').addEventListener('click', () => {
     void runAnalysis();
   });
+  $('analyze-hero').addEventListener('click', () => {
+    void runAnalysis();
+  });
+  chrome.runtime.onMessage.addListener((message: unknown) => {
+    if (typeof message !== 'object' || message === null) return false;
+    const m = message as { type?: unknown; zoomFactor?: unknown };
+    if (m.type === 'zoom-change' && typeof m.zoomFactor === 'number') {
+      applyZoom(m.zoomFactor);
+    }
+    return false;
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'session' && area !== 'local') return;
+    if (PENDING_ANALYZE_KEY in changes && changes[PENDING_ANALYZE_KEY]?.newValue) {
+      void consumePendingAnalyze().then((ready) => {
+        if (ready) void runAnalysis();
+      });
+    }
+  });
   chrome.tabs.onActivated.addListener(() => {
     debouncedRefresh();
+    void syncZoomFromActiveTab();
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (currentPage?.tabId !== tabId) return;
@@ -464,6 +518,9 @@ async function init(): Promise<void> {
     if (event.key === 'Escape') closeCardMenu();
   });
   await refreshCurrentPage();
+  if (await consumePendingAnalyze()) {
+    void runAnalysis();
+  }
 }
 
 void init();

@@ -9,9 +9,6 @@
   "action": {
     "default_title": "Parallel Reader"
   },
-  "side_panel": {
-    "default_path": "sidepanel.html"
-  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -23,5 +20,14 @@
       "run_at": "document_idle",
       "all_frames": false
     }
-  ]
+  ],
+  "commands": {
+    "analyze-current-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+R",
+        "mac": "Alt+Shift+R"
+      },
+      "description": "Open Parallel Reader and analyze the current page"
+    }
+  }
 }

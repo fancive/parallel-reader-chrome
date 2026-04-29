@@ -9,11 +9,18 @@ import {
 } from './shared/types';
 import { logWarn } from './shared/logger';
 
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.warn('[parallel-reader] sidePanel setup', error));
-
 const pageStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
+
+const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
+const SIDE_PANEL_PATH = 'sidepanel.html';
+
+try {
+  void chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: false })
+    .catch((error) => logWarn('reset sidePanel behavior', error));
+} catch (error) {
+  logWarn('setPanelBehavior unavailable', error);
+}
 
 async function loadSettings() {
   const stored = await chrome.storage.local.get(SETTINGS_KEY);
@@ -22,6 +29,16 @@ async function loadSettings() {
   if (parsed.success) return parsed.data;
   logWarn('invalid stored settings; using defaults', parsed.error);
   return ProviderSettingsSchema.parse({});
+}
+
+function enablePanelForTab(tabId: number): void {
+  try {
+    void chrome.sidePanel
+      .setOptions({ tabId, path: SIDE_PANEL_PATH, enabled: true })
+      .catch((error) => logWarn('enable side panel for tab', error));
+  } catch (error) {
+    logWarn('enable side panel for tab', error);
+  }
 }
 
 async function removePageStatesForTab(tabId: number): Promise<void> {
@@ -57,8 +74,64 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return false;
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
-  void removePageStatesForTab(tabId).catch((error) => {
-    logWarn('failed to cleanup page state', error);
-  });
-});
+function safeAddListener<T extends (...args: never[]) => unknown>(
+  event: chrome.events.Event<T> | undefined,
+  listener: T,
+  label: string,
+): void {
+  try {
+    event?.addListener(listener);
+  } catch (error) {
+    logWarn(`addListener failed for ${label}`, error);
+  }
+}
+
+safeAddListener(
+  chrome.action?.onClicked,
+  (tab: chrome.tabs.Tab) => {
+    if (typeof tab.id !== 'number') return;
+    const tabId = tab.id;
+    enablePanelForTab(tabId);
+    chrome.sidePanel
+      .open({ tabId })
+      .catch((error) => logWarn('open side panel', error));
+  },
+  'action.onClicked',
+);
+
+safeAddListener(
+  chrome.tabs?.onRemoved,
+  (tabId: number) => {
+    void removePageStatesForTab(tabId).catch((error) => {
+      logWarn('failed to cleanup page state', error);
+    });
+  },
+  'tabs.onRemoved',
+);
+
+safeAddListener(
+  chrome.tabs?.onZoomChange,
+  ({ tabId, newZoomFactor }: chrome.tabs.ZoomChangeInfo) => {
+    chrome.runtime
+      .sendMessage({ type: 'zoom-change', tabId, zoomFactor: newZoomFactor })
+      .catch(() => {
+        // side panel may be closed; ignore
+      });
+  },
+  'tabs.onZoomChange',
+);
+
+safeAddListener(
+  chrome.commands?.onCommand,
+  (command: string, tab?: chrome.tabs.Tab) => {
+    if (command !== 'analyze-current-page') return;
+    if (!tab || typeof tab.id !== 'number') return;
+    const tabId = tab.id;
+    enablePanelForTab(tabId);
+    chrome.sidePanel
+      .open({ tabId })
+      .catch((error) => logWarn('open side panel via command', error));
+    void pageStorage.set({ [PENDING_ANALYZE_KEY]: Date.now() });
+  },
+  'commands.onCommand',
+);
