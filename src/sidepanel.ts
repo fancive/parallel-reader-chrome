@@ -3,10 +3,8 @@ import {
   type Card,
   type ExtractResponse,
   type LocateResponse,
-  ProviderSettingsSchema,
   type ProviderSettings,
   PAGE_STATE_PREFIX,
-  SETTINGS_KEY,
 } from './shared/types';
 import {
   assessExtractionQuality,
@@ -14,14 +12,13 @@ import {
   type ExtractedTextVersion,
 } from './shared/extraction-quality';
 import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
+import { $, errorMessage } from './sidepanel/dom';
+import { showCardMenu, closeCardMenu } from './sidepanel/menu';
+import { renderCard, setActiveCard } from './sidepanel/card-view';
+import { loadSettings, saveSettings, bindSettingsForm } from './sidepanel/settings-form';
+import { runWithConcurrency, debounce } from './sidepanel/concurrency';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
-
-const $ = <T extends HTMLElement>(id: string): T => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`element #${id} not found`);
-  return el as T;
-};
 
 async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): Promise<T> {
   try {
@@ -31,10 +28,6 @@ async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): 
     await injectContentScript(tabId, pageUrl);
     return (await chrome.tabs.sendMessage(tabId, message)) as T;
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function isMissingContentScriptError(error: unknown): boolean {
@@ -60,19 +53,6 @@ async function injectContentScript(tabId: number, pageUrl = ''): Promise<void> {
   }
 }
 
-async function loadSettings(): Promise<ProviderSettings> {
-  const stored = await chrome.storage.local.get(SETTINGS_KEY);
-  const raw = (stored as Record<string, unknown>)[SETTINGS_KEY];
-  const parsed = ProviderSettingsSchema.safeParse(raw ?? {});
-  if (parsed.success) return parsed.data;
-  console.warn('[parallel-reader] invalid stored settings; using defaults', parsed.error);
-  return ProviderSettingsSchema.parse({});
-}
-
-async function saveSettings(settings: ProviderSettings): Promise<void> {
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
-}
-
 async function loadDebugMode(): Promise<boolean> {
   const stored = await chrome.storage.local.get(DEBUG_MODE_KEY);
   return Boolean((stored as Record<string, unknown>)[DEBUG_MODE_KEY]);
@@ -95,41 +75,6 @@ function bindDebugMode(initial: boolean): void {
     const enabled = (event.currentTarget as HTMLInputElement).checked;
     applyDebugMode(enabled);
     await saveDebugMode(enabled);
-  });
-}
-
-function bindSettingsForm(initial: Readonly<ProviderSettings>): void {
-  $<HTMLInputElement>('api-key').value = initial.apiKey;
-  $<HTMLInputElement>('base-url').value = initial.baseUrl;
-  $<HTMLInputElement>('model').value = initial.model;
-  $<HTMLInputElement>('min-cards').value = String(initial.minCards);
-  $<HTMLInputElement>('max-cards').value = String(initial.maxCards);
-  $<HTMLSelectElement>('summary-language').value = initial.summaryLanguage;
-  $<HTMLSelectElement>('card-density').value = initial.cardDensity;
-  $<HTMLInputElement>('max-doc').value = String(initial.maxDocChars);
-
-  $('settings-toggle').addEventListener('click', () => {
-    const s = $('settings');
-    s.hidden = !s.hidden;
-  });
-
-  $('settings-save').addEventListener('click', async () => {
-    const parsed = ProviderSettingsSchema.safeParse({
-      apiKey: $<HTMLInputElement>('api-key').value.trim(),
-      baseUrl: $<HTMLInputElement>('base-url').value.trim(),
-      model: $<HTMLInputElement>('model').value.trim(),
-      minCards: Number($<HTMLInputElement>('min-cards').value),
-      maxCards: Number($<HTMLInputElement>('max-cards').value),
-      summaryLanguage: $<HTMLSelectElement>('summary-language').value,
-      cardDensity: $<HTMLSelectElement>('card-density').value,
-      maxDocChars: Number($<HTMLInputElement>('max-doc').value),
-    });
-    if (!parsed.success) {
-      setStatus(`设置无效: ${parsed.error.issues[0]?.message ?? '请检查输入'}`);
-      return;
-    }
-    await saveSettings(parsed.data);
-    setStatus('设置已保存');
   });
 }
 
@@ -158,59 +103,7 @@ function fmtPct(hits: number, total: number): string {
   return `${hits}/${total} (${Math.round((hits / total) * 100)}%)`;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
-function fallbackCopyText(text: string): void {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.top = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  const ok = document.execCommand('copy');
-  textarea.remove();
-  if (!ok) throw new Error('浏览器拒绝写入剪贴板');
-}
-
-async function copyText(text: string, okStatus: string): Promise<void> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      fallbackCopyText(text);
-    }
-    setStatus(okStatus);
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(`复制失败: ${msg}`);
-  }
-}
-
-function cardSummaryText(card: Readonly<Card>, index: number): string {
-  const bullets = card.bullets.map((bullet) => `- ${bullet}`);
-  return [
-    `${index + 1}. ${card.title}`,
-    '',
-    `Quote: ${card.anchor}`,
-    '',
-    card.gist,
-    ...bullets,
-  ].join('\n').trim();
-}
-
-function closeCardMenu(): void {
-  const menu = $('card-menu');
-  menu.hidden = true;
-  menu.textContent = '';
-}
 
 type CardResult = { card: Card; locate: LocateResponse };
 
@@ -331,126 +224,25 @@ async function highlightCardAnchor(
   const r = (await sendToTab(page.tabId, { type: 'highlight', anchor }, page.url)) as {
     ok?: boolean;
   };
-  setStatus(r?.ok ? `已高亮 #${index + 1}` : `定位失败 #${index + 1}`);
+  if (r?.ok) {
+    setActiveCard(index);
+    setStatus(`已高亮 #${index + 1}`);
+  } else {
+    setStatus(`定位失败 #${index + 1}`);
+  }
 }
 
-function appendMenuButton(
-  menu: HTMLElement,
-  label: string,
-  disabled: boolean,
-  onClick: () => void | Promise<void>,
-): void {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.role = 'menuitem';
-  button.textContent = label;
-  button.disabled = disabled;
-  button.addEventListener('click', () => {
-    void onClick();
-  });
-  menu.appendChild(button);
-}
 
-function positionCardMenu(menu: HTMLElement, clientX: number, clientY: number): void {
-  menu.style.left = '0px';
-  menu.style.top = '0px';
-  menu.hidden = false;
-  const margin = 8;
-  const rect = menu.getBoundingClientRect();
-  const left = Math.min(Math.max(margin, clientX), window.innerWidth - rect.width - margin);
-  const top = Math.min(Math.max(margin, clientY), window.innerHeight - rect.height - margin);
-  menu.style.left = `${Math.max(margin, left)}px`;
-  menu.style.top = `${Math.max(margin, top)}px`;
-}
-
-function showCardMenu(
-  result: Readonly<CardResult>,
-  index: number,
-  clientX: number,
-  clientY: number,
-): void {
-  const { card, locate } = result;
-  const canHighlight = locate.domRange;
-  const menu = $('card-menu');
-  menu.textContent = '';
-
-  const title = document.createElement('div');
-  title.className = 'card-menu-title';
-  title.textContent = `#${index + 1}`;
-  menu.appendChild(title);
-
-  appendMenuButton(menu, '高亮定位', !canHighlight, () =>
-    highlightCardAnchor(card.anchor, index, canHighlight),
-  );
-  appendMenuButton(menu, '复制引用', false, async () => {
-    closeCardMenu();
-    await copyText(card.anchor, `已复制引用 #${index + 1}`);
-  });
-  appendMenuButton(menu, '复制摘要', false, async () => {
-    closeCardMenu();
-    await copyText(cardSummaryText(card, index), `已复制摘要 #${index + 1}`);
-  });
-
-  positionCardMenu(menu, clientX, clientY);
-  menu.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
-}
-
-function renderCard(result: CardResult, index: number): HTMLElement {
-  const { card, locate } = result;
-  const canHighlight = locate.domRange;
-  const el = document.createElement('div');
-  el.className = `card${canHighlight ? '' : ' miss'}`;
-  el.tabIndex = 0;
-  el.role = 'button';
-  el.ariaLabel = canHighlight
-    ? `高亮定位第 ${index + 1} 张卡片`
-    : `第 ${index + 1} 张卡片暂时无法定位`;
-  el.title = canHighlight ? '点击高亮定位，右键查看更多操作' : '右键查看更多操作';
-
-  const bullets = card.bullets
-    .map((b) => `<li>${escapeHtml(b)}</li>`)
-    .join('');
-
-  const badge = (label: string, hit: boolean) =>
-    `<span class="badge ${hit ? 'hit' : 'miss'}">${label} ${hit ? '✓' : '✗'}</span>`;
-
-  el.innerHTML = `
-    <div class="card-head">
-      <div class="card-title">${index + 1}. ${escapeHtml(card.title)}</div>
-      <div class="card-badges debug-only">
-        ${badge('原文', locate.rawHit)}
-        ${badge('正文', locate.readabilityHit)}
-        ${badge('定位', locate.domRange)}
-      </div>
-    </div>
-    <div class="card-anchor">${escapeHtml(card.anchor)}</div>
-    <div class="card-gist">${escapeHtml(card.gist)}</div>
-    <ul class="card-bullets">${bullets}</ul>
-  `;
-
-  el.addEventListener('click', () => {
-    void highlightCardAnchor(card.anchor, index, canHighlight);
-  });
-
-  el.addEventListener('contextmenu', (event) => {
-    event.preventDefault();
-    showCardMenu(result, index, event.clientX, event.clientY);
-  });
-
-  el.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      void highlightCardAnchor(card.anchor, index, canHighlight);
-      return;
-    }
-    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-      event.preventDefault();
-      const rect = el.getBoundingClientRect();
-      showCardMenu(result, index, rect.left + 28, rect.top + 28);
-    }
-  });
-
-  return el;
+function makeCardDeps() {
+  return {
+    highlightCardAnchor,
+    showCardMenu: (
+      result: Readonly<CardResult>,
+      index: number,
+      clientX: number,
+      clientY: number,
+    ) => showCardMenu(result, index, clientX, clientY, { highlightCardAnchor, setStatus }),
+  };
 }
 
 function renderMeta(meta: Readonly<PageMeta>, used: ExtractedTextVersion): void {
@@ -494,8 +286,9 @@ function renderPageState(state: PageState): void {
   renderMeta(state.meta, state.usedText);
   const container = $('cards');
   container.textContent = '';
+  const cardDeps = makeCardDeps();
   state.results.forEach((r, i) => {
-    container.appendChild(renderCard(r, i));
+    container.appendChild(renderCard(r, i, cardDeps));
   });
   renderStats(state.results);
   setCurrentHasSavedResults(true);
@@ -527,19 +320,32 @@ async function refreshCurrentPage(): Promise<void> {
   }
 }
 
+const LOCATE_CONCURRENCY = 4;
+
+const FAILED_LOCATE: LocateResponse = {
+  rawHit: false,
+  readabilityHit: false,
+  domRange: false,
+  rawIndex: -1,
+  readabilityIndex: -1,
+};
+
 async function locateAll(
   page: Readonly<PageIdentity>,
   cards: readonly Card[],
 ): Promise<readonly CardResult[]> {
-  const results: CardResult[] = [];
-  for (const card of cards) {
+  const settled = await runWithConcurrency(cards, LOCATE_CONCURRENCY, async (card) => {
     const locate = (await sendToTab(page.tabId, {
       type: 'locate',
       anchor: card.anchor,
     }, page.url)) as LocateResponse;
-    results.push({ card, locate });
-  }
-  return results;
+    return { card, locate };
+  });
+  return settled.map((result, i) =>
+    result.status === 'fulfilled'
+      ? result.value
+      : { card: cards[i] as Card, locate: FAILED_LOCATE },
+  );
 }
 
 async function runAnalysis(): Promise<void> {
@@ -596,19 +402,22 @@ async function runAnalysis(): Promise<void> {
 
 async function init(): Promise<void> {
   const [settings, debugMode] = await Promise.all([loadSettings(), loadDebugMode()]);
-  bindSettingsForm(settings);
+  bindSettingsForm(settings, { setStatus, saveSettings });
   bindDebugMode(debugMode);
   updateAnalyzeButton();
+
+  const debouncedRefresh = debounce(() => void refreshCurrentPage(), 120);
+
   $('analyze').addEventListener('click', () => {
     void runAnalysis();
   });
   chrome.tabs.onActivated.addListener(() => {
-    void refreshCurrentPage();
+    debouncedRefresh();
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (currentPage?.tabId !== tabId) return;
     if (changeInfo.url || changeInfo.status === 'complete') {
-      void refreshCurrentPage();
+      debouncedRefresh();
     }
     if (changeInfo.status === 'loading') {
       clearRenderedPage();
@@ -616,10 +425,10 @@ async function init(): Promise<void> {
     }
   });
   chrome.windows.onFocusChanged.addListener(() => {
-    void refreshCurrentPage();
+    debouncedRefresh();
   });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) void refreshCurrentPage();
+    if (!document.hidden) debouncedRefresh();
   });
   document.addEventListener('click', (event) => {
     if ($('card-menu').contains(event.target as Node)) return;
