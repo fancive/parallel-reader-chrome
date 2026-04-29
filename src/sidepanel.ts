@@ -3,10 +3,8 @@ import {
   type Card,
   type ExtractResponse,
   type LocateResponse,
-  ProviderSettingsSchema,
   type ProviderSettings,
   PAGE_STATE_PREFIX,
-  SETTINGS_KEY,
 } from './shared/types';
 import {
   assessExtractionQuality,
@@ -17,6 +15,7 @@ import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page
 import { $, errorMessage } from './sidepanel/dom';
 import { showCardMenu, closeCardMenu } from './sidepanel/menu';
 import { renderCard } from './sidepanel/card-view';
+import { loadSettings, saveSettings, bindSettingsForm } from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
 
@@ -53,19 +52,6 @@ async function injectContentScript(tabId: number, pageUrl = ''): Promise<void> {
   }
 }
 
-async function loadSettings(): Promise<ProviderSettings> {
-  const stored = await chrome.storage.local.get(SETTINGS_KEY);
-  const raw = (stored as Record<string, unknown>)[SETTINGS_KEY];
-  const parsed = ProviderSettingsSchema.safeParse(raw ?? {});
-  if (parsed.success) return parsed.data;
-  console.warn('[parallel-reader] invalid stored settings; using defaults', parsed.error);
-  return ProviderSettingsSchema.parse({});
-}
-
-async function saveSettings(settings: ProviderSettings): Promise<void> {
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
-}
-
 async function loadDebugMode(): Promise<boolean> {
   const stored = await chrome.storage.local.get(DEBUG_MODE_KEY);
   return Boolean((stored as Record<string, unknown>)[DEBUG_MODE_KEY]);
@@ -88,41 +74,6 @@ function bindDebugMode(initial: boolean): void {
     const enabled = (event.currentTarget as HTMLInputElement).checked;
     applyDebugMode(enabled);
     await saveDebugMode(enabled);
-  });
-}
-
-function bindSettingsForm(initial: Readonly<ProviderSettings>): void {
-  $<HTMLInputElement>('api-key').value = initial.apiKey;
-  $<HTMLInputElement>('base-url').value = initial.baseUrl;
-  $<HTMLInputElement>('model').value = initial.model;
-  $<HTMLInputElement>('min-cards').value = String(initial.minCards);
-  $<HTMLInputElement>('max-cards').value = String(initial.maxCards);
-  $<HTMLSelectElement>('summary-language').value = initial.summaryLanguage;
-  $<HTMLSelectElement>('card-density').value = initial.cardDensity;
-  $<HTMLInputElement>('max-doc').value = String(initial.maxDocChars);
-
-  $('settings-toggle').addEventListener('click', () => {
-    const s = $('settings');
-    s.hidden = !s.hidden;
-  });
-
-  $('settings-save').addEventListener('click', async () => {
-    const parsed = ProviderSettingsSchema.safeParse({
-      apiKey: $<HTMLInputElement>('api-key').value.trim(),
-      baseUrl: $<HTMLInputElement>('base-url').value.trim(),
-      model: $<HTMLInputElement>('model').value.trim(),
-      minCards: Number($<HTMLInputElement>('min-cards').value),
-      maxCards: Number($<HTMLInputElement>('max-cards').value),
-      summaryLanguage: $<HTMLSelectElement>('summary-language').value,
-      cardDensity: $<HTMLSelectElement>('card-density').value,
-      maxDocChars: Number($<HTMLInputElement>('max-doc').value),
-    });
-    if (!parsed.success) {
-      setStatus(`设置无效: ${parsed.error.issues[0]?.message ?? '请检查输入'}`);
-      return;
-    }
-    await saveSettings(parsed.data);
-    setStatus('设置已保存');
   });
 }
 
@@ -432,7 +383,7 @@ async function runAnalysis(): Promise<void> {
 
 async function init(): Promise<void> {
   const [settings, debugMode] = await Promise.all([loadSettings(), loadDebugMode()]);
-  bindSettingsForm(settings);
+  bindSettingsForm(settings, { setStatus, saveSettings });
   bindDebugMode(debugMode);
   updateAnalyzeButton();
   $('analyze').addEventListener('click', () => {
