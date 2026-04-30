@@ -3,16 +3,23 @@ import {
   type ExtractedTextVersion,
   selectExtractedTextVersion,
 } from './shared/extraction-quality';
-import { contentScriptInjectionHint, unsupportedPageReason } from './shared/page-support';
+import { contentScriptInjectionHint } from './shared/page-support';
 import {
   type AnalyzeResponse,
   type Card,
   type ExtractResponse,
   type LocateResponse,
   PAGE_STATE_PREFIX,
+  PENDING_ANALYZE_KEY,
+  PENDING_ANALYZE_MSG,
+  PENDING_ANALYZE_TTL_MS,
+  type PendingAnalyzeAck,
+  type PendingAnalyzeRequest,
+  PendingAnalyzeRequestSchema,
   type ProviderSettings,
 } from './shared/types';
 import { renderCard, setActiveCard } from './sidepanel/card-view';
+import { type PageIdentity, pageIdentityFromTab } from './sidepanel/page-identity';
 import { debounce, runWithConcurrency } from './sidepanel/concurrency';
 import { $, errorMessage } from './sidepanel/dom';
 import { closeCardMenu, showCardMenu } from './sidepanel/menu';
@@ -22,8 +29,8 @@ const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
 const THEME_KEY = 'parallel-reader-theme';
 const THEMES = ['paper', 'dark', 'cloud'] as const;
 type Theme = (typeof THEMES)[number];
-const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
-const PENDING_ANALYZE_TTL_MS = 5_000;
+const PENDING_NONCE_CAP = 64;
+const seenNonces = new Map<string, number>();
 
 async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): Promise<T> {
   try {
@@ -137,12 +144,6 @@ function fmtPct(hits: number, total: number): string {
 
 type CardResult = { card: Card; locate: LocateResponse };
 
-type PageIdentity = {
-  tabId: number;
-  url: string;
-  title: string;
-  key: string;
-};
 
 type PageMeta = {
   title: string;
@@ -166,22 +167,18 @@ let currentHasSavedResults = false;
 let analyzeBusy = false;
 let renderVersion = 0;
 
-function buildPageKey(tabId: number, url: string): string {
-  return `${tabId}:${url}`;
-}
-
 async function activePage(): Promise<PageIdentity> {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (!tab?.id) throw new Error('找不到活动标签页');
-  if (!tab.url) throw new Error('当前标签页没有 URL');
-  const unsupportedReason = unsupportedPageReason(tab.url);
-  if (unsupportedReason) throw new Error(unsupportedReason);
-  return {
-    tabId: tab.id,
-    url: tab.url,
-    title: tab.title ?? '',
-    key: buildPageKey(tab.id, tab.url),
-  };
+  if (!tab) throw new Error('找不到活动标签页');
+  return pageIdentityFromTab(tab);
+}
+
+async function pageFromForcedRequest(
+  forced: PendingAnalyzeRequest,
+): Promise<PageIdentity | { mismatch: true }> {
+  const tab = await chrome.tabs.get(forced.tabId).catch(() => null);
+  if (!tab || tab.url !== forced.url) return { mismatch: true };
+  return pageIdentityFromTab(tab);
 }
 
 async function loadPageState(pageKey: string): Promise<PageState | null> {
@@ -407,7 +404,38 @@ async function locateAll(
   return results;
 }
 
-async function runAnalysis(): Promise<void> {
+async function resolveAnalysisPage(
+  forced?: PendingAnalyzeRequest,
+): Promise<PageIdentity | null> {
+  if (!forced) return await activePage();
+  const result = await pageFromForcedRequest(forced);
+  if ('mismatch' in result) {
+    setStatus('页面已变更，已取消分析');
+    return null;
+  }
+  return result;
+}
+
+function noteNonce(nonce: string, ts: number): boolean {
+  pruneNonces();
+  if (seenNonces.has(nonce)) return false;
+  if (seenNonces.size >= PENDING_NONCE_CAP) {
+    const first = seenNonces.keys().next().value;
+    if (first !== undefined) seenNonces.delete(first);
+  }
+  seenNonces.set(nonce, ts);
+  return true;
+}
+
+function pruneNonces(): void {
+  const cutoff = Date.now() - PENDING_ANALYZE_TTL_MS;
+  for (const [nonce, ts] of seenNonces) {
+    if (ts < cutoff) seenNonces.delete(nonce);
+  }
+}
+
+async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
+  if (forced && !noteNonce(forced.nonce, forced.ts)) return;
   const replacingExistingResults = currentHasSavedResults;
   setAnalyzeBusy(true);
   if (!replacingExistingResults) clearRenderedPage();
@@ -417,7 +445,9 @@ async function runAnalysis(): Promise<void> {
     if (!(await ensureProviderReady())) return;
 
     setStatus(replacingExistingResults ? '重新抽取页面内容...' : '抽取页面内容...');
-    const page = await activePage();
+    const resolved = await resolveAnalysisPage(forced);
+    if (!resolved) return;
+    const page = resolved;
     currentPage = page;
     const extracted = (await sendToTab(page.tabId, { type: 'extract' }, page.url)) as ExtractResponse;
     const meta = pageMetaFromExtracted(extracted);
@@ -476,12 +506,15 @@ async function syncZoomFromActiveTab(): Promise<void> {
   }
 }
 
-async function consumePendingAnalyze(): Promise<boolean> {
+async function consumePendingAnalyze(): Promise<PendingAnalyzeRequest | null> {
   const stored = await pageStorage.get(PENDING_ANALYZE_KEY);
-  const ts = (stored as Record<string, unknown>)[PENDING_ANALYZE_KEY];
-  if (typeof ts !== 'number') return false;
+  const raw = (stored as Record<string, unknown>)[PENDING_ANALYZE_KEY];
+  if (raw === undefined) return null;
   await pageStorage.remove(PENDING_ANALYZE_KEY);
-  return Date.now() - ts <= PENDING_ANALYZE_TTL_MS;
+  const parsed = PendingAnalyzeRequestSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  if (Date.now() - parsed.data.ts > PENDING_ANALYZE_TTL_MS) return null;
+  return parsed.data;
 }
 
 async function init(): Promise<void> {
@@ -504,19 +537,30 @@ async function init(): Promise<void> {
   $('analyze-hero').addEventListener('click', () => {
     void runAnalysis();
   });
-  chrome.runtime.onMessage.addListener((message: unknown) => {
+  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (typeof message !== 'object' || message === null) return false;
-    const m = message as { type?: unknown; zoomFactor?: unknown };
+    const m = message as { type?: unknown; zoomFactor?: unknown; request?: unknown };
     if (m.type === 'zoom-change' && typeof m.zoomFactor === 'number') {
       applyZoom(m.zoomFactor);
+      return false;
+    }
+    if (m.type === PENDING_ANALYZE_MSG) {
+      const parsed = PendingAnalyzeRequestSchema.safeParse(m.request);
+      if (!parsed.success) {
+        sendResponse({ ok: false, error: parsed.error.message } satisfies PendingAnalyzeAck);
+        return false;
+      }
+      sendResponse({ ok: true } satisfies PendingAnalyzeAck);
+      void runAnalysis(parsed.data);
+      return false;
     }
     return false;
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'session' && area !== 'local') return;
-    if (PENDING_ANALYZE_KEY in changes && changes[PENDING_ANALYZE_KEY]?.newValue) {
-      void consumePendingAnalyze().then((ready) => {
-        if (ready) void runAnalysis();
+    if (PENDING_ANALYZE_KEY in changes && changes[PENDING_ANALYZE_KEY]?.newValue !== undefined) {
+      void consumePendingAnalyze().then((req) => {
+        if (req) void runAnalysis(req);
       });
     }
   });
@@ -551,9 +595,8 @@ async function init(): Promise<void> {
     if (event.key === 'Escape') closeCardMenu();
   });
   await refreshCurrentPage();
-  if (await consumePendingAnalyze()) {
-    void runAnalysis();
-  }
+  const pending = await consumePendingAnalyze();
+  if (pending) void runAnalysis(pending);
 }
 
 void init();

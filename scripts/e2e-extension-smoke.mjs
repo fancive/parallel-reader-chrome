@@ -277,6 +277,45 @@ async function main() {
     assert(located.domRange === true, 'anchor did not locate to a DOM Range');
   });
 
+  // The pending-analyze message is what background's command handler (Alt+Shift+R)
+  // emits to the side panel. Playwright cannot fire a real Chrome global shortcut,
+  // so we exercise the consumer wire from the service worker (the same context
+  // the real handler runs in). Producer construction is covered by
+  // tests/pending-analyze.test.mjs (buildPendingAnalyzeRequest).
+  await record('service worker can ack pending-analyze through side panel listener', ['risk:wiring', 'risk:contract'], async () => {
+    const sw = context.serviceWorkers()[0];
+    assert(sw, 'service worker not available');
+    const fixtureTabId = await sw.evaluate(async () => {
+      const tabs = await chrome.tabs.query({});
+      const fixture = tabs.find((t) => t.url?.includes('/article.html'));
+      if (!fixture?.id) throw new Error('fixture tab not found');
+      return fixture.id;
+    });
+    const ack = await sw.evaluate(
+      async ({ tabId, url }) => {
+        return chrome.runtime.sendMessage({
+          type: 'pending-analyze',
+          request: { tabId, url, nonce: `e2e-ok-${Date.now()}`, ts: Date.now() },
+        });
+      },
+      { tabId: fixtureTabId, url: baseUrl },
+    );
+    assert(ack && ack.ok === true, `expected ack.ok=true, got: ${JSON.stringify(ack)}`);
+  });
+
+  await record('side panel rejects malformed pending-analyze message', ['risk:wiring', 'risk:failure_path'], async () => {
+    const sw = context.serviceWorkers()[0];
+    assert(sw, 'service worker not available');
+    const ack = await sw.evaluate(async () => {
+      return chrome.runtime.sendMessage({
+        type: 'pending-analyze',
+        request: { tabId: 'not-a-number', url: 1, nonce: '', ts: -1 },
+      });
+    });
+    assert(ack && ack.ok === false, `expected ack.ok=false, got: ${JSON.stringify(ack)}`);
+    assert(typeof ack.error === 'string' && ack.error.length > 0, 'expected non-empty error string');
+  });
+
   await record('browser context and fixture server close cleanly', ['risk:resource_lifecycle'], async () => {
     if (context) {
       await context.close();

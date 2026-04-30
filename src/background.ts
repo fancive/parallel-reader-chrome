@@ -5,14 +5,19 @@ import {
   type AnalyzeResponse,
   ProviderSettingsSchema,
   PAGE_STATE_PREFIX,
+  PENDING_ANALYZE_KEY,
+  PENDING_ANALYZE_MSG,
+  type PendingAnalyzeAck,
+  type PendingAnalyzeRequest,
   SETTINGS_KEY,
 } from './shared/types';
 import { logWarn } from './shared/logger';
+import { buildPendingAnalyzeRequest } from './shared/pending-analyze';
 
 const pageStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
 
-const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
 const SIDE_PANEL_PATH = 'sidepanel.html';
+const BADGE_CLEAR_MS = 5_000;
 
 try {
   void chrome.sidePanel
@@ -31,13 +36,51 @@ async function loadSettings() {
   return ProviderSettingsSchema.parse({});
 }
 
-function enablePanelForTab(tabId: number): void {
+async function enablePanelForTab(tabId: number): Promise<void> {
+  await chrome.sidePanel.setOptions({ tabId, path: SIDE_PANEL_PATH, enabled: true });
+}
+
+function notifyOpenFailure(tabId: number): void {
   try {
-    void chrome.sidePanel
-      .setOptions({ tabId, path: SIDE_PANEL_PATH, enabled: true })
-      .catch((error) => logWarn('enable side panel for tab', error));
+    void chrome.action.setBadgeBackgroundColor?.({ color: '#c33', tabId });
+    void chrome.action.setBadgeText?.({ text: '!', tabId });
+    setTimeout(() => {
+      void chrome.action.setBadgeText?.({ text: '', tabId });
+    }, BADGE_CLEAR_MS);
   } catch (error) {
-    logWarn('enable side panel for tab', error);
+    logWarn('notify open failure', error);
+  }
+}
+
+async function dispatchPendingAnalyze(request: PendingAnalyzeRequest): Promise<void> {
+  try {
+    const ack = (await chrome.runtime.sendMessage({
+      type: PENDING_ANALYZE_MSG,
+      request,
+    })) as PendingAnalyzeAck | undefined;
+    if (ack && ack.ok === false) logWarn('pending-analyze rejected', ack.error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes('Receiving end does not exist') ||
+      message.includes('Could not establish connection')
+    ) {
+      await pageStorage.set({ [PENDING_ANALYZE_KEY]: request });
+      return;
+    }
+    logWarn('dispatch pending-analyze', error);
+    notifyOpenFailure(request.tabId);
+  }
+}
+
+async function openSidePanelForTab(tabId: number): Promise<void> {
+  try {
+    await enablePanelForTab(tabId);
+    await chrome.sidePanel.open({ tabId });
+  } catch (error) {
+    logWarn('open side panel', error);
+    notifyOpenFailure(tabId);
+    throw error;
   }
 }
 
@@ -90,11 +133,9 @@ safeAddListener(
   chrome.action?.onClicked,
   (tab: chrome.tabs.Tab) => {
     if (typeof tab.id !== 'number') return;
-    const tabId = tab.id;
-    enablePanelForTab(tabId);
-    chrome.sidePanel
-      .open({ tabId })
-      .catch((error) => logWarn('open side panel', error));
+    void openSidePanelForTab(tab.id).catch(() => {
+      // already logged + badged in openSidePanelForTab
+    });
   },
   'action.onClicked',
 );
@@ -124,14 +165,17 @@ safeAddListener(
 safeAddListener(
   chrome.commands?.onCommand,
   (command: string, tab?: chrome.tabs.Tab) => {
-    if (command !== 'analyze-current-page') return;
-    if (!tab || typeof tab.id !== 'number') return;
-    const tabId = tab.id;
-    enablePanelForTab(tabId);
-    chrome.sidePanel
-      .open({ tabId })
-      .catch((error) => logWarn('open side panel via command', error));
-    void pageStorage.set({ [PENDING_ANALYZE_KEY]: Date.now() });
+    if (command !== 'analyze-current-page' || !tab) return;
+    const request = buildPendingAnalyzeRequest(tab);
+    if (!request) return;
+    void (async () => {
+      try {
+        await openSidePanelForTab(request.tabId);
+      } catch {
+        return;
+      }
+      await dispatchPendingAnalyze(request);
+    })();
   },
   'commands.onCommand',
 );

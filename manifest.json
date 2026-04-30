@@ -4,10 +4,13 @@
   "version": "0.0.1",
   "description": "LLM summary cards anchored to verbatim quotes in the page DOM.",
   "minimum_chrome_version": "114",
-  "permissions": ["sidePanel", "storage", "activeTab", "scripting"],
+  "permissions": ["sidePanel", "storage", "activeTab", "tabs", "scripting"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "Parallel Reader"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "background": {
     "service_worker": "background.js",

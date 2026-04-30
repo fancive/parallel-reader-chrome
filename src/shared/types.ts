@@ -43,6 +43,26 @@ export type ProviderSettings = z.infer<typeof ProviderSettingsSchema>;
 export const SETTINGS_KEY = 'parallel-reader-settings';
 export const PAGE_STATE_PREFIX = 'parallel-reader-page:';
 
+export const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
+export const PENDING_ANALYZE_MSG = 'pending-analyze' as const;
+export const PENDING_ANALYZE_TTL_MS = 5_000;
+
+export const PendingAnalyzeRequestSchema = z.object({
+  tabId: z.number().int().nonnegative(),
+  url: z.string().min(1),
+  nonce: z.string().min(1),
+  ts: z.number().int().nonnegative(),
+});
+
+export type PendingAnalyzeRequest = z.infer<typeof PendingAnalyzeRequestSchema>;
+
+export type PendingAnalyzeMessage = Readonly<{
+  type: typeof PENDING_ANALYZE_MSG;
+  request: PendingAnalyzeRequest;
+}>;
+
+export type PendingAnalyzeAck = Readonly<{ ok: true } | { ok: false; error: string }>;
+
 export type AnalyzeRequest = {
   type: 'analyze';
   rawText: string;
