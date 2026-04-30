@@ -923,6 +923,8 @@ async function main() {
     );
   });
 
+  await phaseProcessRestartPersistence();
+
   await record('browser context and fixture server close cleanly', ['risk:resource_lifecycle'], async () => {
     if (context) {
       await context.close();
@@ -946,6 +948,145 @@ async function main() {
     }
     process.exitCode = 1;
   }
+}
+
+async function relaunchExtensionPreservingProfile() {
+  const executablePath = await resolveChromeExecutable();
+  const launchOptions = {
+    headless: false,
+    executablePath,
+    ignoreDefaultArgs: ['--disable-extensions', '--disable-component-extensions-with-background-pages'],
+    args: [
+      `--disable-extensions-except=${distDir}`,
+      `--load-extension=${distDir}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+    ],
+  };
+  context = await chromium.launchPersistentContext(profileDir, launchOptions);
+  await waitForExtensionId();
+}
+
+async function waitForServiceWorkerStorageReady(timeoutMs = 10000) {
+  await waitUntil(
+    async () => {
+      const sw = context.serviceWorkers()[0];
+      if (!sw) return false;
+      try {
+        const ok = await sw.evaluate(async () => {
+          const probe = await chrome.storage.local.get(null);
+          return probe !== null && typeof probe === 'object';
+        });
+        return ok === true;
+      } catch {
+        return false;
+      }
+    },
+    'extension service worker did not become ready after Chrome restart',
+    timeoutMs,
+  );
+}
+
+async function readPageStateViaServiceWorker(url) {
+  const sw = context.serviceWorkers()[0];
+  assert(sw, 'service worker not available');
+  return sw.evaluate(
+    async ({ prefix, pageUrl }) => {
+      const key = `${prefix}${pageUrl}`;
+      const stored = await chrome.storage.local.get(key);
+      return stored[key] ?? null;
+    },
+    { prefix: pageStatePrefix, pageUrl: url },
+  );
+}
+
+async function phaseProcessRestartPersistence() {
+  // Verifies cards persisted under chrome.storage.local survive a real Chrome
+  // process exit + relaunch (same --user-data-dir). Distinct from tab/page
+  // recreation, which the earlier "tab recreation" phase already covers.
+  await record(
+    'analysis cards survive Chrome process restart with the same user-data-dir',
+    ['risk:regression', 'risk:resource_lifecycle', 'risk:wiring'],
+    async () => {
+      providerMode = 'success';
+      providerDelayMs = 0;
+      providerRequests.length = 0;
+
+      const restartUrl = `${baseUrl}?case=process-restart`;
+
+      // ---- Phase 1: produce + persist cards in the first Chrome process ----
+      await openArticleInFixtureTab(restartUrl);
+      const firstTabId = await tabIdForUrl(restartUrl);
+      await enableSidePanelForTab(firstTabId);
+      await waitForTabScopedSidePanelPath(firstTabId);
+      await openSidePanelPage(firstTabId);
+      await configureFakeProvider();
+      await triggerAnalysisWithoutChangingActiveTab();
+      await waitForCompletedCards(2);
+
+      const requestsBeforeRestart = providerRequests.length;
+      const beforeSnapshot = await pageStateSnapshot(restartUrl);
+      assert(beforeSnapshot.localState, 'page state was not persisted before restart');
+      const expectedCount = beforeSnapshot.localState.results.length;
+      assert(expectedCount === 2, `expected 2 persisted cards before restart, got ${expectedCount}`);
+      const expectedAnchors = beforeSnapshot.localState.results.map((r) => r.card.anchor);
+
+      // ---- Phase 2: kill the Chrome process, keeping --user-data-dir intact ----
+      await context.close();
+      context = undefined;
+      sidePage = undefined;
+      fixturePage = undefined;
+      extensionId = '';
+
+      // ---- Phase 3: relaunch with the SAME profile + unpacked extension ----
+      // Critically, do NOT wipe profileDir here (launchExtension() does, which
+      // is why we use a separate helper).
+      await relaunchExtensionPreservingProfile();
+      await waitForServiceWorkerStorageReady();
+
+      // ---- Phase 4: assert chrome.storage.local replayed across processes ----
+      const replayed = await readPageStateViaServiceWorker(restartUrl);
+      assert(replayed, 'persisted page state was lost across Chrome process restart');
+      assert(
+        Array.isArray(replayed.results) && replayed.results.length === expectedCount,
+        `restored card count drifted across restart: ${replayed?.results?.length} vs ${expectedCount}`,
+      );
+      const replayedAnchors = replayed.results.map((r) => r.card.anchor);
+      assert(
+        JSON.stringify(replayedAnchors) === JSON.stringify(expectedAnchors),
+        `restored anchors drifted across restart: ${JSON.stringify(replayedAnchors)} vs ${JSON.stringify(expectedAnchors)}`,
+      );
+
+      // ---- Phase 5: reopen URL + side panel and confirm UI restoration ----
+      await openArticleInFixtureTab(restartUrl);
+      const secondTabId = await tabIdForUrl(restartUrl);
+      assert(
+        secondTabId !== firstTabId,
+        `expected a fresh tab id after restart, but got the same: ${secondTabId}`,
+      );
+      await enableSidePanelForTab(secondTabId);
+      await waitForTabScopedSidePanelPath(secondTabId);
+      await openSidePanelPage(secondTabId);
+
+      await sidePage.waitForFunction(
+        () => document.querySelector('#status')?.textContent?.includes('已恢复当前页结果'),
+        null,
+        { timeout: 10000 },
+      );
+      const cardCount = await sidePage.locator('.card').count();
+      assert(
+        cardCount === expectedCount,
+        `expected ${expectedCount} restored cards in UI after restart, got ${cardCount}`,
+      );
+
+      // Restore must not re-call the provider; that would mean we lost the
+      // cache and silently re-analyzed.
+      assert(
+        providerRequests.length === requestsBeforeRestart,
+        `restore-after-restart unexpectedly called the provider (${providerRequests.length - requestsBeforeRestart} extra request(s))`,
+      );
+    },
+  );
 }
 
 if (process.argv.includes('--check-browser')) {
