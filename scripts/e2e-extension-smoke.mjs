@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from 'node:fs';
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -44,15 +44,20 @@ async function resolveChromeExecutable() {
     return process.env.CHROME_PATH;
   }
 
-  const channel = process.env.PLAYWRIGHT_CHROME_CHANNEL || 'chrome';
-  const playwrightPath = chromium.executablePath({ channel });
-  if (await executableExists(playwrightPath)) return playwrightPath;
+  const channel = process.env.PLAYWRIGHT_CHROME_CHANNEL;
+  if (channel) {
+    const playwrightPath = chromium.executablePath({ channel });
+    if (await executableExists(playwrightPath)) return playwrightPath;
+  }
+
+  const bundledPath = chromium.executablePath();
+  if (await executableExists(bundledPath)) return bundledPath;
 
   const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   if (await executableExists(macChrome)) return macChrome;
 
   throw new Error(
-    `No executable Chromium found. Set CHROME_PATH or run npx playwright install chromium for channel ${channel}.`,
+    'No executable Chromium found. Set CHROME_PATH, PLAYWRIGHT_CHROME_CHANNEL, or run npx playwright-core install chromium.',
   );
 }
 
@@ -293,10 +298,25 @@ async function startFixtureServer() {
   otherUrl = `${serverOrigin}/other.html`;
 }
 
+function findExtensionServiceWorker() {
+  return context.serviceWorkers().find((sw) => sw.url().endsWith('/background.js'));
+}
+
 async function waitForExtensionId() {
-  let serviceWorker = context.serviceWorkers()[0];
+  let serviceWorker = findExtensionServiceWorker();
+  const deadline = Date.now() + 10000;
+  while (!serviceWorker && Date.now() < deadline) {
+    await context
+      .waitForEvent('serviceworker', { timeout: deadline - Date.now() })
+      .catch(() => undefined);
+    serviceWorker = findExtensionServiceWorker();
+  }
   if (!serviceWorker) {
-    serviceWorker = await context.waitForEvent('serviceworker', { timeout: 10000 });
+    const observed = context.serviceWorkers().map((sw) => sw.url());
+    assert(
+      false,
+      `parallel-reader background service worker did not appear within 10s; observed=${JSON.stringify(observed)}`,
+    );
   }
   const url = serviceWorker.url();
   const match = url.match(/^chrome-extension:\/\/([^/]+)\//);
@@ -304,9 +324,19 @@ async function waitForExtensionId() {
   extensionId = match[1];
 }
 
+async function seedDeveloperModePreference() {
+  const defaultDir = join(profileDir, 'Default');
+  await mkdir(defaultDir, { recursive: true });
+  const prefs = {
+    extensions: { ui: { developer_mode: true } },
+  };
+  await writeFile(join(defaultDir, 'Preferences'), JSON.stringify(prefs));
+}
+
 async function launchExtension() {
   await rm(profileDir, { recursive: true, force: true });
   await mkdir(profileDir, { recursive: true });
+  await seedDeveloperModePreference();
 
   const executablePath = await resolveChromeExecutable();
   const launchOptions = {
@@ -316,12 +346,46 @@ async function launchExtension() {
     args: [
       `--disable-extensions-except=${distDir}`,
       `--load-extension=${distDir}`,
+      '--disable-features=DisableLoadExtensionCommandLineSwitch',
       '--no-first-run',
       '--no-default-browser-check',
     ],
   };
   context = await chromium.launchPersistentContext(profileDir, launchOptions);
+  await dumpChromeArgs();
   await waitForExtensionId();
+}
+
+async function dumpChromeArgs() {
+  if (process.platform !== 'linux') return;
+  try {
+    const procEntries = await readdir('/proc');
+    for (const entry of procEntries) {
+      if (!/^\d+$/.test(entry)) continue;
+      let comm = '';
+      try {
+        comm = (await readFile(`/proc/${entry}/comm`, 'utf8')).trim();
+      } catch {
+        continue;
+      }
+      if (comm !== 'chrome' && comm !== 'google-chrome') continue;
+      let cmdline = '';
+      try {
+        cmdline = await readFile(`/proc/${entry}/cmdline`, 'utf8');
+      } catch {
+        continue;
+      }
+      const args = cmdline.split('\0').filter(Boolean);
+      const isMain = !args.some((a) => a.startsWith('--type='));
+      if (!isMain) continue;
+      console.error(`[diag] chrome pid=${entry} args:`);
+      for (const arg of args) console.error(`  ${arg}`);
+      return;
+    }
+    console.error('[diag] no chrome main process found in /proc');
+  } catch (error) {
+    console.error('[diag] dumpChromeArgs failed:', error instanceof Error ? error.message : error);
+  }
 }
 
 const ANALYZE_TRIGGER_SELECTOR = '#analyze:visible, #analyze-hero:visible';
@@ -373,7 +437,7 @@ async function openArticleInFixtureTab(url) {
 }
 
 async function tabIdForUrl(url) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   return sw.evaluate((targetUrl) => {
     return chrome.tabs.query({}).then((tabs) => {
@@ -385,7 +449,7 @@ async function tabIdForUrl(url) {
 }
 
 async function waitForTabScopedSidePanelPath(tabId) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   const expected = `sidepanel.html?tabId=${tabId}`;
   await waitUntil(
@@ -399,7 +463,7 @@ async function waitForTabScopedSidePanelPath(tabId) {
 }
 
 async function enableSidePanelForTab(tabId) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   await sw.evaluate(async (id) => {
     await chrome.sidePanel.setOptions({
@@ -411,7 +475,7 @@ async function enableSidePanelForTab(tabId) {
 }
 
 async function sidePanelSnapshot(tabIds = []) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   return sw.evaluate(async (ids) => {
     const manifest = chrome.runtime.getManifest();
@@ -550,7 +614,7 @@ async function main() {
   });
 
   await record('browser action does not use global open-on-click behavior', ['risk:wiring', 'risk:regression'], async () => {
-    const sw = context.serviceWorkers()[0];
+    const sw = findExtensionServiceWorker();
     assert(sw, 'service worker not available');
     const behavior = await sw.evaluate(async () => chrome.sidePanel.getPanelBehavior());
     assert(
@@ -722,7 +786,7 @@ async function main() {
   await record('service worker can ack pending-analyze through side panel listener', ['risk:wiring', 'risk:contract'], async () => {
     providerMode = 'success';
     providerDelayMs = 0;
-    const sw = context.serviceWorkers()[0];
+    const sw = findExtensionServiceWorker();
     assert(sw, 'service worker not available');
     const fixture = await sw.evaluate(async () => {
       const tabs = await chrome.tabs.query({});
@@ -744,7 +808,7 @@ async function main() {
   });
 
   await record('side panel rejects malformed pending-analyze message', ['risk:wiring', 'risk:failure_path'], async () => {
-    const sw = context.serviceWorkers()[0];
+    const sw = findExtensionServiceWorker();
     assert(sw, 'service worker not available');
     const ack = await sw.evaluate(async () => {
       return chrome.runtime.sendMessage({
