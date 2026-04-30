@@ -21,6 +21,12 @@
       "all_frames": false
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["sidepanel.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "commands": {
     "analyze-current-page": {
       "suggested_key": {
