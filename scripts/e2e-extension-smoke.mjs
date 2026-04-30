@@ -44,15 +44,20 @@ async function resolveChromeExecutable() {
     return process.env.CHROME_PATH;
   }
 
-  const channel = process.env.PLAYWRIGHT_CHROME_CHANNEL || 'chrome';
-  const playwrightPath = chromium.executablePath({ channel });
-  if (await executableExists(playwrightPath)) return playwrightPath;
+  const channel = process.env.PLAYWRIGHT_CHROME_CHANNEL;
+  if (channel) {
+    const playwrightPath = chromium.executablePath({ channel });
+    if (await executableExists(playwrightPath)) return playwrightPath;
+  }
+
+  const bundledPath = chromium.executablePath();
+  if (await executableExists(bundledPath)) return bundledPath;
 
   const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   if (await executableExists(macChrome)) return macChrome;
 
   throw new Error(
-    `No executable Chromium found. Set CHROME_PATH or run npx playwright install chromium for channel ${channel}.`,
+    'No executable Chromium found. Set CHROME_PATH, PLAYWRIGHT_CHROME_CHANNEL, or run npx playwright-core install chromium.',
   );
 }
 
