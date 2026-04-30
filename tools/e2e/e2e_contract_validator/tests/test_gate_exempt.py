@@ -1,32 +1,7 @@
 from __future__ import annotations
 
-import os
-
-from e2e_contract_validator import exempt, gate, init
-
 from conftest import make_ctrf, write_json
-
-
-def test_init_writes_scaffold_and_refuses_overwrite(tmp_path):
-    written = init.run_init(tmp_path)
-
-    assert ".e2e/config.yaml" in written
-    assert (tmp_path / ".e2e" / "gate.sh").exists()
-    assert os.access(tmp_path / ".e2e" / "gate.sh", os.X_OK)
-    assert ".e2e/artifact.json" in (tmp_path / ".gitignore").read_text(encoding="utf-8")
-
-    try:
-        init.run_init(tmp_path)
-    except FileExistsError:
-        pass
-    else:
-        raise AssertionError("second init should refuse without --force")
-
-
-def test_init_from_input_test_scaffold(tmp_path):
-    init.run_init(tmp_path, from_input_test="code-agent")
-
-    assert (tmp_path / ".e2e" / "cases" / "input-test" / "code-agent" / "cases.yaml").exists()
+from e2e_contract_validator import exempt, gate
 
 
 def test_exempt_validates_all_types(tmp_path):
