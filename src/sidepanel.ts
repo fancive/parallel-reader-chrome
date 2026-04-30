@@ -21,6 +21,16 @@ import {
 import { renderCard, setActiveCard } from './sidepanel/card-view';
 import { debounce, runWithConcurrency } from './sidepanel/concurrency';
 import { $, errorMessage } from './sidepanel/dom';
+import {
+  clearAllHistory,
+  deleteHistoryEntry,
+  entriesToJson,
+  entryToMarkdown,
+  type HistoryEntry,
+  listHistoryEntries,
+  sanitizeFilename,
+} from './sidepanel/history';
+import { renderHistoryList, triggerDownload } from './sidepanel/history-view';
 import { closeCardMenu, showCardMenu } from './sidepanel/menu';
 import {
   buildPageState,
@@ -147,6 +157,125 @@ function showSettings(): void {
   $('settings').hidden = false;
 }
 
+let historyOpen = false;
+
+function hideMainView(): void {
+  $('action').hidden = true;
+  $('cards').hidden = true;
+  $('meta').hidden = true;
+  $('stats').hidden = true;
+  $('analyze-hero').hidden = true;
+  $('settings').hidden = true;
+}
+
+function showMainView(): void {
+  $('action').hidden = false;
+  $('cards').hidden = false;
+}
+
+async function openHistoryView(): Promise<void> {
+  historyOpen = true;
+  hideMainView();
+  $('history').hidden = false;
+  await refreshHistoryList();
+}
+
+function closeHistoryView(): void {
+  historyOpen = false;
+  $('history').hidden = true;
+  showMainView();
+  updateAnalyzeButton();
+  void refreshCurrentPage();
+}
+
+async function refreshHistoryList(): Promise<void> {
+  const entries = await listHistoryEntries(chrome.storage.local);
+  const list = $('history-list');
+  const empty = $('history-empty');
+  renderHistoryList(list, empty, entries, {
+    onOpen: handleHistoryOpen,
+    onDelete: handleHistoryDelete,
+    onExport: handleHistoryExport,
+  });
+}
+
+async function handleHistoryOpen(entry: Readonly<HistoryEntry>): Promise<void> {
+  try {
+    const targetTabId = panelTabId ?? currentPage?.tabId;
+    if (typeof targetTabId === 'number') {
+      await chrome.tabs.update(targetTabId, { url: entry.url, active: true });
+    } else {
+      await chrome.tabs.update({ url: entry.url });
+    }
+    closeHistoryView();
+  } catch (error) {
+    setStatus(`无法打开页面: ${errorMessage(error)}`);
+  }
+}
+
+async function handleHistoryDelete(entry: Readonly<HistoryEntry>): Promise<void> {
+  await deleteHistoryEntry(chrome.storage.local, entry.storageKey);
+  setStatus(`已删除 ${entry.title || entry.url}`);
+  await refreshHistoryList();
+  if (currentPage && currentPage.url === entry.url) {
+    setCurrentHasSavedResults(false);
+  }
+}
+
+function handleHistoryExport(entry: Readonly<HistoryEntry>): void {
+  const filename = `${sanitizeFilename(entry.title || entry.url)}.md`;
+  triggerDownload(filename, entryToMarkdown(entry), 'text/markdown;charset=utf-8');
+  setStatus(`已导出 ${filename}`);
+}
+
+async function handleExportAll(): Promise<void> {
+  const entries = await listHistoryEntries(chrome.storage.local);
+  if (entries.length === 0) {
+    setStatus('暂无历史可导出');
+    return;
+  }
+  const filename = `parallel-reader-history-${new Date().toISOString().slice(0, 10)}.json`;
+  triggerDownload(filename, entriesToJson(entries), 'application/json;charset=utf-8');
+  setStatus(`已导出 ${entries.length} 条历史`);
+}
+
+async function handleClearAll(): Promise<void> {
+  await clearAllHistory(chrome.storage.local);
+  setStatus('历史已清空');
+  await refreshHistoryList();
+  setCurrentHasSavedResults(false);
+}
+
+function bindHistoryView(): void {
+  $('history-open').addEventListener('click', () => {
+    void openHistoryView();
+  });
+  $('history-close').addEventListener('click', () => {
+    closeHistoryView();
+  });
+  $('history-export-all').addEventListener('click', () => {
+    void handleExportAll();
+  });
+  const clearBtn = $<HTMLButtonElement>('history-clear-all');
+  clearBtn.dataset.state = 'idle';
+  clearBtn.addEventListener('click', () => {
+    if (clearBtn.dataset.state === 'confirm') {
+      clearBtn.dataset.state = 'idle';
+      clearBtn.textContent = '清空全部';
+      void handleClearAll();
+      return;
+    }
+    clearBtn.dataset.state = 'confirm';
+    clearBtn.textContent = '确认清空';
+    setTimeout(() => {
+      if (clearBtn.dataset.state === 'confirm') {
+        clearBtn.dataset.state = 'idle';
+        clearBtn.textContent = '清空全部';
+      }
+    }, 3000);
+  });
+}
+
 function providerReady(settings: Readonly<ProviderSettings>): boolean {
   return Boolean(settings.apiKey.trim() && settings.baseUrl.trim() && settings.model.trim());
 }
@@ -224,6 +353,7 @@ function pageMetaFromExtracted(extracted: Readonly<ExtractResponse>): PageMeta {
 }
 
 function updateAnalyzeButton(): void {
+  if (historyOpen) return;
   const button = $<HTMLButtonElement>('analyze');
   const hero = $<HTMLButtonElement>('analyze-hero');
   const heroLabel = hero.querySelector<HTMLElement>('.hero-action-label');
@@ -389,6 +519,7 @@ function hideStaleCacheBanner(): void {
 }
 
 async function refreshCurrentPage(): Promise<void> {
+  if (historyOpen) return;
   const version = ++refreshVersion;
   try {
     const page = await activePage();
@@ -618,6 +749,7 @@ async function init(): Promise<void> {
   });
   bindTheme(theme);
   bindDebugMode(debugMode);
+  bindHistoryView();
   updateAnalyzeButton();
   void syncZoomFromActiveTab();
 

@@ -493,6 +493,127 @@ button:focus-visible,
   gap: 10px;
 }
 
+.settings-secondary {
+  align-self: flex-start;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.history-panel:not([hidden]) {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-heading {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.history-bulk-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--surface-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-title {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.history-url {
+  color: var(--muted);
+  font-size: 11px;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.history-meta {
+  color: var(--muted);
+  font-size: 11px;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.history-item-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.history-action {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  padding: 5px 9px;
+}
+
+.history-action-danger {
+  border-color: var(--miss-border);
+  color: var(--miss);
+}
+
+.history-action-danger:hover {
+  background: var(--miss-soft);
+  border-color: var(--miss);
+  color: var(--miss);
+}
+
+.history-action-danger[data-state='confirm'] {
+  background: var(--miss);
+  color: var(--on-accent);
+  border-color: var(--miss);
+}
+
+.history-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  text-align: center;
+  padding: 20px 8px;
+}
+
 .card {
   padding: 15px 16px;
   border: 1px solid var(--line);
