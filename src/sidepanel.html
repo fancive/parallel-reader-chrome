@@ -38,6 +38,7 @@
       <p class="settings-note">
         本地模式：API Key 只保存在当前 Chrome。公开发布前需要改为后端或临时凭证方案。
       </p>
+      <button id="history-open" class="settings-secondary" type="button">📚 查看历史</button>
       <label>API Key
         <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
       </label>
@@ -97,6 +98,22 @@
         <div class="stat"><span class="stat-label">页面定位</span><span id="stat-dom"></span></div>
       </div>
     </details>
+
+    <section id="history" class="history-panel" hidden aria-label="历史记录">
+      <header class="history-header">
+        <div class="history-title-row">
+          <span class="eyebrow">Library</span>
+          <span class="history-heading">历史记录</span>
+        </div>
+        <button id="history-close" class="icon-button" type="button" aria-label="关闭历史" title="返回">×</button>
+      </header>
+      <div class="history-bulk-actions">
+        <button id="history-export-all" type="button">导出 JSON</button>
+        <button id="history-clear-all" type="button" class="history-action-danger">清空全部</button>
+      </div>
+      <div id="history-list" class="history-list"></div>
+      <p id="history-empty" class="history-empty" hidden>No analyzed pages yet. Open a page and click Analyze.</p>
+    </section>
 
     <section id="cards"></section>
     <div id="card-menu" class="card-menu" role="menu" aria-label="卡片操作" hidden></div>
