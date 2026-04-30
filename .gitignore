@@ -9,3 +9,7 @@ reports/
 
 .DS_Store
 *.log
+
+# Vendored Python tools
+__pycache__/
+*.pyc

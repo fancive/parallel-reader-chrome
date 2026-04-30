@@ -49,16 +49,10 @@ jobs:
       - name: Audit
         run: npm audit --audit-level=high
 
-      - name: Checkout E2E Validator
-        uses: actions/checkout@v4
-        with:
-          repository: fancive/claude-code-addons
-          path: _addons
-
       - name: E2E Gate
         env:
           CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
-          E2E_CONTRACT_VALIDATOR_PYTHONPATH: ${{ github.workspace }}/_addons/scripts
+          E2E_CONTRACT_VALIDATOR_PYTHONPATH: ${{ github.workspace }}/tools/e2e
         run: xvfb-run -a timeout 600 bash .e2e/gate.sh --json
 
       - name: Upload E2E Artifacts on Failure
