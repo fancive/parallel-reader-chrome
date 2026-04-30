@@ -77,42 +77,42 @@ body[data-theme='dark'] {
 }
 
 body[data-theme='cloud'] {
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --bg: #eaf3fc;
-  --bg-image: radial-gradient(120% 80% at 0% 0%, #f5fbff 0%, #e3eefb 55%, #d6e5f6 100%);
-  --surface: rgb(255 255 255 / 78%);
-  --surface-strong: rgb(255 255 255 / 92%);
-  --surface-muted: rgb(255 255 255 / 60%);
-  --surface-muted-line: #d8e4f3;
-  --input-bg: rgb(255 255 255 / 92%);
-  --input-border: #c8d6ea;
-  --button-border: #c8d6ea;
-  --debug-bg: rgb(255 255 255 / 70%);
-  --ink: #1c2b40;
-  --ink-soft: #4a5c79;
-  --muted: #6b7a93;
-  --line: #d8e4f3;
-  --accent: #3b82f6;
-  --accent-strong: #2563eb;
-  --accent-soft: #dbeafe;
+  font-family: ui-serif, 'Tiempos Text', Georgia, 'Times New Roman', serif;
+  --bg: #faf9f5;
+  --bg-image: none;
+  --surface: #ffffff;
+  --surface-strong: #ffffff;
+  --surface-muted: #f5f4ed;
+  --surface-muted-line: #ebe8dd;
+  --input-bg: #ffffff;
+  --input-border: #d9d5c6;
+  --button-border: #c7c2b1;
+  --debug-bg: #f5f4ed;
+  --ink: #1f1e1b;
+  --ink-soft: #45413a;
+  --muted: #7a766b;
+  --line: #ebe8dd;
+  --accent: #d97757;
+  --accent-strong: #c15f3c;
+  --accent-soft: #f5e8e0;
   --on-accent: #ffffff;
-  --warn: #c87d12;
-  --warn-soft: #fff4dc;
-  --warn-ink: #6e4400;
-  --warn-border: #f0c478;
-  --miss: #d2453f;
-  --miss-soft: #fde8e6;
-  --miss-border: #f0a8a3;
-  --hit: #2f9e58;
-  --hit-soft: #e3f6ec;
-  --hit-ink: #1c5e34;
-  --hit-border: #9ad6b1;
-  --anchor-bg: rgb(255 255 255 / 75%);
-  --anchor-border: #b8cce6;
-  --shadow-card: 0 12px 30px rgb(59 130 246 / 14%), 0 1px 2px rgb(28 43 64 / 6%);
-  --shadow-menu: 0 18px 40px rgb(59 130 246 / 22%), 0 2px 6px rgb(28 43 64 / 10%);
-  --radius-card: 14px;
-  --radius-control: 10px;
+  --warn: #b96e1a;
+  --warn-soft: #fdefd8;
+  --warn-ink: #5d3a00;
+  --warn-border: #e9c688;
+  --miss: #c44a3f;
+  --miss-soft: #f9e9e6;
+  --miss-border: #e0a59f;
+  --hit: #2f7a4d;
+  --hit-soft: #e6f1eb;
+  --hit-ink: #205536;
+  --hit-border: #a3c8b0;
+  --anchor-bg: #f5f4ed;
+  --anchor-border: #c7c2b1;
+  --shadow-card: 0 1px 2px rgb(31 30 27 / 6%), 0 4px 12px rgb(31 30 27 / 4%);
+  --shadow-menu: 0 8px 24px rgb(31 30 27 / 12%), 0 2px 4px rgb(31 30 27 / 6%);
+  --radius-card: 10px;
+  --radius-control: 8px;
 }
 
 * {
