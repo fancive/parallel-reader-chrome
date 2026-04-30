@@ -16,12 +16,11 @@ import { buildPendingAnalyzeRequest } from './shared/pending-analyze';
 
 const pageStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
 
-const SIDE_PANEL_PATH = 'sidepanel.html';
 const BADGE_CLEAR_MS = 5_000;
 
 try {
   void chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: false })
+    .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => logWarn('reset sidePanel behavior', error));
 } catch (error) {
   logWarn('setPanelBehavior unavailable', error);
@@ -34,10 +33,6 @@ async function loadSettings() {
   if (parsed.success) return parsed.data;
   logWarn('invalid stored settings; using defaults', parsed.error);
   return ProviderSettingsSchema.parse({});
-}
-
-async function enablePanelForTab(tabId: number): Promise<void> {
-  await chrome.sidePanel.setOptions({ tabId, path: SIDE_PANEL_PATH, enabled: true });
 }
 
 function notifyOpenFailure(tabId: number): void {
@@ -73,15 +68,15 @@ async function dispatchPendingAnalyze(request: PendingAnalyzeRequest): Promise<v
   }
 }
 
-async function openSidePanelForTab(tabId: number): Promise<void> {
-  try {
-    await enablePanelForTab(tabId);
-    await chrome.sidePanel.open({ tabId });
-  } catch (error) {
+function openSidePanelForTab(tabId: number): Promise<void> {
+  // Must stay synchronous up to chrome.sidePanel.open: MV3 requires the open
+  // call within the user-gesture turn, and any await above this line drops
+  // the gesture token. Manifest side_panel.default_path covers cold SW.
+  return chrome.sidePanel.open({ tabId }).catch((error: unknown) => {
     logWarn('open side panel', error);
     notifyOpenFailure(tabId);
     throw error;
-  }
+  });
 }
 
 async function removePageStatesForTab(tabId: number): Promise<void> {
@@ -130,17 +125,6 @@ function safeAddListener<T extends (...args: never[]) => unknown>(
 }
 
 safeAddListener(
-  chrome.action?.onClicked,
-  (tab: chrome.tabs.Tab) => {
-    if (typeof tab.id !== 'number') return;
-    void openSidePanelForTab(tab.id).catch(() => {
-      // already logged + badged in openSidePanelForTab
-    });
-  },
-  'action.onClicked',
-);
-
-safeAddListener(
   chrome.tabs?.onRemoved,
   (tabId: number) => {
     void removePageStatesForTab(tabId).catch((error) => {
@@ -168,14 +152,14 @@ safeAddListener(
     if (command !== 'analyze-current-page' || !tab) return;
     const request = buildPendingAnalyzeRequest(tab);
     if (!request) return;
-    void (async () => {
-      try {
-        await openSidePanelForTab(request.tabId);
-      } catch {
-        return;
-      }
-      await dispatchPendingAnalyze(request);
-    })();
+    // Synchronous open call to preserve the user gesture; dispatch chains
+    // after the open promise resolves. Failure is already logged + badged.
+    const openPromise = openSidePanelForTab(request.tabId);
+    void openPromise
+      .then(() => dispatchPendingAnalyze(request))
+      .catch(() => {
+        /* swallowed; openSidePanelForTab handled UX */
+      });
   },
   'commands.onCommand',
 );

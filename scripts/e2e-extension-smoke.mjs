@@ -11,13 +11,18 @@ const evidenceDir = join(e2eDir, 'evidence', 'extension-smoke');
 const profileDir = join(evidenceDir, 'chrome-profile');
 const artifactPath = join(e2eDir, 'artifact.json');
 const distDir = resolve(root, 'dist');
+const settingsKey = 'parallel-reader-settings';
 
 const tests = [];
 let context;
 let server;
+let serverOrigin = '';
 let baseUrl = '';
 let extensionId = '';
 let sidePage;
+let fixturePage;
+let providerMode = 'success';
+const providerRequests = [];
 
 async function executableExists(path) {
   try {
@@ -139,9 +144,98 @@ function closeServer(httpServer) {
   });
 }
 
+function readRequestBody(req) {
+  return new Promise((resolveRead, rejectRead) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        rejectRead(new Error('request body exceeded 1MB'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => resolveRead(body));
+    req.on('error', rejectRead);
+  });
+}
+
+function writeJson(res, status, payload) {
+  res.writeHead(status, {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    'content-type': 'application/json; charset=utf-8',
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function fakeProviderCards() {
+  return {
+    cards: [
+      {
+        title: 'Tab-aware reading',
+        anchor: 'Gemini is not limited to one tab',
+        gist: 'The fixture confirms the provider result can anchor back into the live page.',
+        bullets: ['The analysis path crosses side panel, background, provider, and content script.'],
+      },
+      {
+        title: 'Quote-preserving anchors',
+        anchor: 'preserve anchor quotes',
+        gist: 'The generated card keeps a verbatim quote that the content script can locate.',
+        bullets: ['This guards the release-grade generation happy path without external LLM calls.'],
+      },
+    ],
+  };
+}
+
+async function handleProviderRequest(req, res) {
+  const body = await readRequestBody(req);
+  let parsed = {};
+  try {
+    parsed = JSON.parse(body || '{}');
+  } catch {
+    writeJson(res, 400, { error: { message: 'invalid JSON request' } });
+    return;
+  }
+  providerRequests.push({
+    authorization: req.headers.authorization || '',
+    bodyLength: body.length,
+    messageCount: Array.isArray(parsed.messages) ? parsed.messages.length : 0,
+    model: parsed.model || '',
+    responseFormatType: parsed.response_format?.type || '',
+  });
+
+  if (providerMode === 'error') {
+    writeJson(res, 502, { error: { message: 'fake provider failure' } });
+    return;
+  }
+
+  writeJson(res, 200, {
+    choices: [
+      {
+        message: {
+          content: JSON.stringify(fakeProviderCards()),
+        },
+      },
+    ],
+  });
+}
+
 async function startFixtureServer() {
   server = createServer((req, res) => {
-    if (req.url !== '/' && req.url !== '/article.html') {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    if (req.method === 'OPTIONS') {
+      writeJson(res, 204, {});
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/chat/completions') {
+      void handleProviderRequest(req, res).catch((error) => {
+        writeJson(res, 500, { error: { message: error instanceof Error ? error.message : String(error) } });
+      });
+      return;
+    }
+    if (url.pathname !== '/' && url.pathname !== '/article.html') {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('not found');
       return;
@@ -162,7 +256,8 @@ async function startFixtureServer() {
       </html>`);
   });
   const port = await listen(server);
-  baseUrl = `http://127.0.0.1:${port}/article.html`;
+  serverOrigin = `http://127.0.0.1:${port}`;
+  baseUrl = `${serverOrigin}/article.html`;
 }
 
 async function waitForExtensionId() {
@@ -224,6 +319,53 @@ async function activeTabLocate(anchor) {
   }, anchor);
 }
 
+async function openFixtureArticle() {
+  if (!fixturePage || fixturePage.isClosed()) {
+    fixturePage = await context.newPage();
+    await fixturePage.goto(baseUrl);
+  }
+  await fixturePage.bringToFront();
+  return fixturePage;
+}
+
+async function configureFakeProvider() {
+  await sidePage.evaluate(
+    async ({ key, origin }) => {
+      await chrome.storage.local.set({
+        [key]: {
+          apiKey: 'e2e-test-key',
+          baseUrl: origin,
+          model: 'fake-chat',
+          minCards: 2,
+          maxCards: 2,
+          maxDocChars: 20000,
+          summaryLanguage: 'zh-CN',
+          cardDensity: 'normal',
+        },
+      });
+    },
+    { key: settingsKey, origin: serverOrigin },
+  );
+}
+
+async function triggerAnalysisWithoutChangingActiveTab() {
+  await sidePage.evaluate(() => {
+    const button = document.querySelector('#analyze:not([hidden]), #analyze-hero:not([hidden])');
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('analyze button is not available');
+    }
+    button.click();
+  });
+}
+
+async function waitForCompletedCards(expectedCount) {
+  await sidePage.waitForFunction(
+    (count) => document.querySelector('#status')?.textContent?.includes(`完成 · ${count} 张卡片`),
+    expectedCount,
+    { timeout: 10000 },
+  );
+}
+
 async function main() {
   const start = nowMs();
   await rm(evidenceDir, { recursive: true, force: true });
@@ -237,6 +379,16 @@ async function main() {
   await record('unpacked extension service worker starts', ['risk:wiring', 'risk:resource_lifecycle'], async () => {
     await launchExtension();
     assert(extensionId.length > 10, 'extension id was not discovered');
+  });
+
+  await record('side panel behavior is set to open-on-action-click', ['risk:wiring', 'risk:regression'], async () => {
+    const sw = context.serviceWorkers()[0];
+    assert(sw, 'service worker not available');
+    const behavior = await sw.evaluate(async () => chrome.sidePanel.getPanelBehavior());
+    assert(
+      behavior?.openPanelOnActionClick === true,
+      `expected openPanelOnActionClick=true; got ${JSON.stringify(behavior)}`,
+    );
   });
 
   await record('side panel blocks analysis until provider settings exist', ['risk:failure_path', 'risk:security'], async () => {
@@ -259,9 +411,7 @@ async function main() {
   });
 
   await record('content script extracts the local article fixture', ['risk:boundary_io', 'risk:wiring', 'risk:contract'], async () => {
-    const page = await context.newPage();
-    await page.goto(baseUrl);
-    await page.bringToFront();
+    await openFixtureArticle();
     const extracted = await activeTabExtract();
     assert(extracted.title === 'Parallel Reader Local Fixture', `unexpected title: ${extracted.title}`);
     assert(
@@ -277,12 +427,45 @@ async function main() {
     assert(located.domRange === true, 'anchor did not locate to a DOM Range');
   });
 
+  await record('fake provider analysis renders anchored cards', ['risk:boundary_io', 'risk:wiring', 'risk:contract', 'risk:regression'], async () => {
+    providerMode = 'success';
+    providerRequests.length = 0;
+    await configureFakeProvider();
+    await openFixtureArticle();
+    await triggerAnalysisWithoutChangingActiveTab();
+    await waitForCompletedCards(2);
+    const cardCount = await sidePage.locator('.card').count();
+    assert(cardCount === 2, `expected 2 rendered cards, got ${cardCount}`);
+    const firstCard = await sidePage.locator('.card').first().textContent();
+    assert(firstCard?.includes('Tab-aware reading'), 'first fake provider card was not rendered');
+    assert(providerRequests.length === 1, `expected 1 fake provider request, got ${providerRequests.length}`);
+    const request = providerRequests[0];
+    assert(request.authorization === 'Bearer e2e-test-key', 'provider request did not include the stored API key');
+    assert(request.model === 'fake-chat', `unexpected provider model: ${request.model}`);
+    assert(request.responseFormatType === 'json_object', 'provider request did not ask for a JSON object');
+    assert(request.messageCount === 2, `unexpected provider message count: ${request.messageCount}`);
+  });
+
+  await record('provider failure preserves existing rendered cards', ['risk:failure_path', 'risk:regression'], async () => {
+    providerMode = 'error';
+    await openFixtureArticle();
+    await triggerAnalysisWithoutChangingActiveTab();
+    await sidePage.waitForFunction(
+      () => document.querySelector('#status')?.textContent?.includes('错误: HTTP 502'),
+      null,
+      { timeout: 10000 },
+    );
+    const cardCount = await sidePage.locator('.card').count();
+    assert(cardCount === 2, `provider failure cleared existing cards; count=${cardCount}`);
+  });
+
   // The pending-analyze message is what background's command handler (Alt+Shift+R)
   // emits to the side panel. Playwright cannot fire a real Chrome global shortcut,
   // so we exercise the consumer wire from the service worker (the same context
   // the real handler runs in). Producer construction is covered by
   // tests/pending-analyze.test.mjs (buildPendingAnalyzeRequest).
   await record('service worker can ack pending-analyze through side panel listener', ['risk:wiring', 'risk:contract'], async () => {
+    providerMode = 'success';
     const sw = context.serviceWorkers()[0];
     assert(sw, 'service worker not available');
     const fixtureTabId = await sw.evaluate(async () => {
@@ -301,6 +484,7 @@ async function main() {
       { tabId: fixtureTabId, url: baseUrl },
     );
     assert(ack && ack.ok === true, `expected ack.ok=true, got: ${JSON.stringify(ack)}`);
+    await waitForCompletedCards(2);
   });
 
   await record('side panel rejects malformed pending-analyze message', ['risk:wiring', 'risk:failure_path'], async () => {
