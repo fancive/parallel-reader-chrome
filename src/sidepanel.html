@@ -70,8 +70,36 @@
       <label>截断字数
         <input id="max-doc" type="number" min="500" step="500" />
       </label>
+      <label>缓存保留天数
+        <input id="cache-ttl-days" type="number" min="1" max="90" step="1" />
+      </label>
       <p id="settings-error" class="settings-error" role="alert" hidden></p>
       <button id="settings-save" type="button">保存</button>
+      <div class="cache-controls">
+        <div class="cache-controls-title">缓存管理</div>
+        <div class="cache-controls-row">
+          <button id="cache-clear-current" type="button">清除当前页缓存</button>
+          <span id="cache-clear-current-confirm" class="cache-confirm" hidden>
+            <span>确定清除？</span>
+            <button id="cache-clear-current-yes" type="button">确认</button>
+            <button id="cache-clear-current-no" type="button">取消</button>
+          </span>
+        </div>
+        <div class="cache-controls-row">
+          <button id="cache-clear-all" type="button">清除全部缓存页面</button>
+          <span id="cache-clear-all-confirm" class="cache-confirm" hidden>
+            <span>确定清除全部？</span>
+            <button id="cache-clear-all-yes" type="button">确认</button>
+            <button id="cache-clear-all-no" type="button">取消</button>
+          </span>
+        </div>
+        <p id="cache-status" class="cache-status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="stale-cache-banner" class="stale-cache-banner" role="status" hidden>
+      <span class="stale-cache-text">页面内容自上次分析后已变化。是否重新分析？</span>
+      <button id="stale-cache-rerun" type="button">重新分析</button>
     </section>
 
     <section id="meta" class="page-state" hidden>

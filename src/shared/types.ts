@@ -19,6 +19,10 @@ export type SummaryLanguage = z.infer<typeof SummaryLanguageSchema>;
 export const CardDensitySchema = z.enum(['concise', 'normal', 'detailed']);
 export type CardDensity = z.infer<typeof CardDensitySchema>;
 
+export const CACHE_TTL_DAYS_DEFAULT = 7;
+export const CACHE_TTL_DAYS_MIN = 1;
+export const CACHE_TTL_DAYS_MAX = 90;
+
 export const ProviderSettingsSchema = z.object({
   apiKey: z.string().default(''),
   baseUrl: z.string().default('https://api.deepseek.com/v1'),
@@ -28,6 +32,12 @@ export const ProviderSettingsSchema = z.object({
   maxDocChars: z.number().int().min(500).default(20000),
   summaryLanguage: SummaryLanguageSchema.default('zh-CN'),
   cardDensity: CardDensitySchema.default('normal'),
+  cacheTtlDays: z
+    .number()
+    .int()
+    .min(CACHE_TTL_DAYS_MIN)
+    .max(CACHE_TTL_DAYS_MAX)
+    .default(CACHE_TTL_DAYS_DEFAULT),
 }).superRefine((settings, ctx) => {
   if (settings.maxCards < settings.minCards) {
     ctx.addIssue({
@@ -42,6 +52,7 @@ export type ProviderSettings = z.infer<typeof ProviderSettingsSchema>;
 
 export const SETTINGS_KEY = 'parallel-reader-settings';
 export const PAGE_STATE_PREFIX = 'parallel-reader-page:';
+export const CACHE_SCHEMA_VERSION = 2;
 
 export const PENDING_ANALYZE_KEY = 'parallel-reader-pending-analyze';
 export const PENDING_ANALYZE_MSG = 'pending-analyze' as const;

@@ -26,6 +26,8 @@ let fixturePage;
 let providerMode = 'success';
 let providerDelayMs = 0;
 const providerRequests = [];
+let mutableUrl = '';
+let mutableArticleBody = '<p>The Parallel Reader cache governance fixture starts as version one. Persistent fingerprint anchors should be derived from this body.</p>';
 
 async function executableExists(path) {
   try {
@@ -257,12 +259,32 @@ async function startFixtureServer() {
       });
       return;
     }
-    if (url.pathname !== '/' && url.pathname !== '/article.html' && url.pathname !== '/other.html') {
+    if (
+      url.pathname !== '/' &&
+      url.pathname !== '/article.html' &&
+      url.pathname !== '/other.html' &&
+      url.pathname !== '/mutable.html'
+    ) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('not found');
       return;
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    if (url.pathname === '/mutable.html') {
+      res.end(`<!doctype html>
+      <html>
+        <head><title>Parallel Reader Mutable Fixture</title></head>
+        <body>
+          <main>
+            <article>
+              <h1>Parallel Reader Mutable Fixture</h1>
+              ${mutableArticleBody}
+            </article>
+          </main>
+        </body>
+      </html>`);
+      return;
+    }
     if (url.pathname === '/other.html') {
       res.end(`<!doctype html>
       <html>
@@ -296,6 +318,7 @@ async function startFixtureServer() {
   serverOrigin = `http://127.0.0.1:${port}`;
   baseUrl = `${serverOrigin}/article.html`;
   otherUrl = `${serverOrigin}/other.html`;
+  mutableUrl = `${serverOrigin}/mutable.html`;
 }
 
 function findExtensionServiceWorker() {
@@ -818,6 +841,86 @@ async function main() {
     });
     assert(ack && ack.ok === false, `expected ack.ok=false, got: ${JSON.stringify(ack)}`);
     assert(typeof ack.error === 'string' && ack.error.length > 0, 'expected non-empty error string');
+  });
+
+  // Cache governance: fingerprint mismatch must not auto-restore cached cards.
+  // Producer: a different LLM card set is registered just for this phase so the
+  // anchors line up with the mutable fixture body.
+  await record('cache fingerprint mismatch surfaces a rerun banner instead of restoring cards', ['risk:regression', 'risk:contract', 'risk:failure_path'], async () => {
+    providerMode = 'success';
+    providerDelayMs = 0;
+    providerRequests.length = 0;
+    mutableArticleBody = '<p>The cache governance fixture body version one. Fingerprint anchor token alpha-one.</p>';
+    await openArticleInFixtureTab(mutableUrl);
+    const tabId = await tabIdForUrl(mutableUrl);
+    await enableSidePanelForTab(tabId);
+    await waitForTabScopedSidePanelPath(tabId);
+    await openSidePanelPage(tabId);
+    await configureFakeProvider();
+    await triggerAnalysisWithoutChangingActiveTab();
+    await waitForCompletedCards(2);
+    const initialSnapshot = await pageStateSnapshot(mutableUrl);
+    assert(initialSnapshot.localState, 'expected mutable fixture cache after analysis');
+    assert(
+      typeof initialSnapshot.localState.fingerprint === 'string' &&
+        initialSnapshot.localState.fingerprint.length === 16,
+      `expected 16-char fingerprint, got: ${initialSnapshot.localState.fingerprint}`,
+    );
+    assert(
+      initialSnapshot.localState.schemaVersion === 2,
+      `expected schemaVersion 2, got: ${initialSnapshot.localState.schemaVersion}`,
+    );
+
+    mutableArticleBody = '<p>Completely different fixture body version two. Fingerprint anchor token beta-two.</p>';
+    await fixturePage.reload({ waitUntil: 'load' });
+    await fixturePage.bringToFront();
+
+    await sidePage.waitForFunction(
+      () => {
+        const banner = document.querySelector('#stale-cache-banner');
+        return banner instanceof HTMLElement && banner.hidden === false;
+      },
+      null,
+      { timeout: 10000 },
+    );
+    const cardCount = await sidePage.locator('.card').count();
+    assert(cardCount === 0, `cards auto-restored despite fingerprint mismatch; count=${cardCount}`);
+  });
+
+  await record('clearing all cached pages wipes storage namespace', ['risk:regression', 'risk:resource_lifecycle'], async () => {
+    const before = await sidePage.evaluate(async () => {
+      const all = await chrome.storage.local.get(null);
+      return Object.keys(all).filter((k) => k.startsWith('parallel-reader-page:'));
+    });
+    assert(before.length > 0, `expected at least one cached page before clear-all; got: ${before.length}`);
+
+    await sidePage.evaluate(async () => {
+      const settings = document.querySelector('#settings');
+      if (settings instanceof HTMLElement && settings.hidden) {
+        document.querySelector('#settings-toggle')?.click();
+      }
+      document.querySelector('#cache-clear-all')?.click();
+      document.querySelector('#cache-clear-all-yes')?.click();
+    });
+    await sidePage.waitForFunction(
+      () => document.querySelector('#cache-status')?.textContent?.includes('已清除'),
+      null,
+      { timeout: 5000 },
+    );
+
+    const after = await sidePage.evaluate(async () => {
+      const all = await chrome.storage.local.get(null);
+      return Object.keys(all).filter((k) => k.startsWith('parallel-reader-page:'));
+    });
+    assert(after.length === 0, `clear-all left ${after.length} entries: ${JSON.stringify(after)}`);
+
+    const settings = await sidePage.evaluate(async () => {
+      return chrome.storage.local.get('parallel-reader-settings');
+    });
+    assert(
+      settings['parallel-reader-settings'] !== undefined,
+      'clear-all unexpectedly removed provider settings',
+    );
   });
 
   await record('browser context and fixture server close cleanly', ['risk:resource_lifecycle'], async () => {

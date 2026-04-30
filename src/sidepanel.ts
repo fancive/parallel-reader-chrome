@@ -3,13 +3,13 @@ import {
   type ExtractedTextVersion,
   selectExtractedTextVersion,
 } from './shared/extraction-quality';
+import { computeContentFingerprint } from './shared/fingerprint';
 import { contentScriptInjectionHint } from './shared/page-support';
 import {
   type AnalyzeResponse,
   type Card,
   type ExtractResponse,
   type LocateResponse,
-  PAGE_STATE_PREFIX,
   PENDING_ANALYZE_KEY,
   PENDING_ANALYZE_MSG,
   PENDING_ANALYZE_TTL_MS,
@@ -22,8 +22,22 @@ import { renderCard, setActiveCard } from './sidepanel/card-view';
 import { debounce, runWithConcurrency } from './sidepanel/concurrency';
 import { $, errorMessage } from './sidepanel/dom';
 import { closeCardMenu, showCardMenu } from './sidepanel/menu';
+import {
+  buildPageState,
+  type CardResult,
+  clearAllPageStates,
+  clearPageState,
+  loadPageState as loadStoredPageState,
+  type PageMeta,
+  type PageState,
+  savePageState as saveStoredPageState,
+} from './sidepanel/page-cache';
 import { type PageIdentity, pageIdentityFromTab } from './sidepanel/page-identity';
-import { bindSettingsForm, loadSettings, saveSettings } from './sidepanel/settings-form';
+import {
+  bindSettingsForm,
+  loadSettings,
+  saveSettings,
+} from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
 const THEME_KEY = 'parallel-reader-theme';
@@ -152,24 +166,6 @@ function fmtPct(hits: number, total: number): string {
 
 
 
-type CardResult = { card: Card; locate: LocateResponse };
-
-
-type PageMeta = {
-  title: string;
-  url: string;
-  rawTextLength: number;
-  readabilityTextLength: number;
-};
-
-type PageState = {
-  page: PageIdentity;
-  meta: PageMeta;
-  usedText: ExtractedTextVersion;
-  results: readonly CardResult[];
-  analyzedAt: number;
-};
-
 const pageStateStorage: chrome.storage.StorageArea = chrome.storage.local;
 const pendingAnalyzeStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
 const legacyPageStateStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
@@ -197,32 +193,17 @@ async function pageFromForcedRequest(
   return pageIdentityFromTab(tab);
 }
 
-function pageStateStorageKey(pageKey: string): string {
-  return `${PAGE_STATE_PREFIX}${pageKey}`;
-}
-
-function legacyPageStateStorageKey(tabId: number, url: string): string {
-  return `${PAGE_STATE_PREFIX}${tabId}:${url}`;
-}
-
 async function loadPageState(page: Readonly<PageIdentity>): Promise<PageState | null> {
-  const storageKey = pageStateStorageKey(page.key);
-  const stored = await pageStateStorage.get(storageKey);
-  const state = (stored as Record<string, unknown>)[storageKey] as PageState | undefined;
-  if (state) return state;
-
-  const legacyKey = legacyPageStateStorageKey(page.tabId, page.url);
-  const legacyStored = await legacyPageStateStorage.get(legacyKey);
-  const legacyState = (legacyStored as Record<string, unknown>)[legacyKey] as PageState | undefined;
-  if (!legacyState) return null;
-
-  const migrated = { ...legacyState, page };
-  await savePageState(migrated);
-  return migrated;
+  const settings = await loadSettings();
+  const result = await loadStoredPageState(pageStateStorage, legacyPageStateStorage, page, {
+    ttlDays: settings.cacheTtlDays,
+    now: Date.now(),
+  });
+  return result.status === 'hit' ? result.state : null;
 }
 
 async function savePageState(state: PageState): Promise<void> {
-  await pageStateStorage.set({ [pageStateStorageKey(state.page.key)]: state });
+  await saveStoredPageState(pageStateStorage, state);
 }
 
 function clearRenderedPage(): void {
@@ -386,14 +367,44 @@ function renderCompletedPageState(state: PageState): void {
   setStatus(`完成 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处可定位`);
 }
 
+function fingerprintSourceText(extracted: Readonly<ExtractResponse>): string {
+  return extracted.readabilityText.trim().length > 0 ? extracted.readabilityText : extracted.rawText;
+}
+
+async function liveFingerprint(page: Readonly<PageIdentity>): Promise<string | null> {
+  try {
+    const extracted = (await sendToTab(page.tabId, { type: 'extract' }, page.url)) as ExtractResponse;
+    return await computeContentFingerprint(fingerprintSourceText(extracted));
+  } catch {
+    return null;
+  }
+}
+
+function showStaleCacheBanner(): void {
+  $('stale-cache-banner').hidden = false;
+}
+
+function hideStaleCacheBanner(): void {
+  $('stale-cache-banner').hidden = true;
+}
+
 async function refreshCurrentPage(): Promise<void> {
   const version = ++refreshVersion;
   try {
     const page = await activePage();
     currentPage = page;
+    hideStaleCacheBanner();
     const cached = await loadPageState(page);
     if (version !== refreshVersion) return;
     if (cached) {
+      const live = cached.fingerprint ? await liveFingerprint(page) : null;
+      if (version !== refreshVersion) return;
+      if (live && live !== cached.fingerprint) {
+        clearRenderedPage();
+        showStaleCacheBanner();
+        setStatus(page.title ? `当前页内容已变化：${page.title}` : '当前页内容已变化');
+        return;
+      }
       renderPageState(cached);
       return;
     }
@@ -505,10 +516,12 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     if (!replacingExistingResults) clearRenderedPage();
 
     if (canRenderAnalysis(version, page)) {
+      hideStaleCacheBanner();
       setStatus(replacingExistingResults ? '重新抽取页面内容...' : '抽取页面内容...');
     }
     const extracted = (await sendToTab(page.tabId, { type: 'extract' }, page.url)) as ExtractResponse;
     const meta = pageMetaFromExtracted(extracted);
+    const fingerprint = await computeContentFingerprint(fingerprintSourceText(extracted));
     if (canRenderAnalysis(version, page)) {
       renderMeta(meta, selectExtractedTextVersion(meta.readabilityTextLength));
       setStatus('调用 LLM...');
@@ -531,13 +544,14 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     }
 
     const results = await locateAll(page, resp.cards);
-    const state: PageState = {
+    const state: PageState = buildPageState({
       page,
       meta,
       usedText: resp.usedText,
       results,
-      analyzedAt: Date.now(),
-    };
+      fingerprint,
+      now: Date.now(),
+    });
     await savePageState(state);
     if (canRenderAnalysis(version, page)) {
       renderCompletedPageState(state);
@@ -583,7 +597,25 @@ async function init(): Promise<void> {
     loadDebugMode(),
     loadTheme(),
   ]);
-  bindSettingsForm(settings, { setStatus, saveSettings });
+  bindSettingsForm(settings, {
+    setStatus,
+    saveSettings,
+    clearCurrentPage: async () => {
+      if (!currentPage) return false;
+      await clearPageState(pageStateStorage, currentPage.key);
+      hideStaleCacheBanner();
+      clearRenderedPage();
+      setStatus('已清除当前页缓存');
+      return true;
+    },
+    clearAllPages: async () => {
+      const removed = await clearAllPageStates(pageStateStorage);
+      hideStaleCacheBanner();
+      clearRenderedPage();
+      setStatus(`已清除全部缓存（${removed} 项）`);
+      return removed;
+    },
+  });
   bindTheme(theme);
   bindDebugMode(debugMode);
   updateAnalyzeButton();
@@ -595,6 +627,10 @@ async function init(): Promise<void> {
     void runAnalysis();
   });
   $('analyze-hero').addEventListener('click', () => {
+    void runAnalysis();
+  });
+  $('stale-cache-rerun').addEventListener('click', () => {
+    hideStaleCacheBanner();
     void runAnalysis();
   });
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {

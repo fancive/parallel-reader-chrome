@@ -8,7 +8,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Biome](https://img.shields.io/badge/lint-Biome-60A5FA?logo=biome&logoColor=white)](biome.json)
 [![esbuild](https://img.shields.io/badge/build-esbuild-FFCF00?logo=esbuild&logoColor=black)](esbuild.config.mjs)
-[![tests](https://img.shields.io/badge/tests-43%20passing-2EA043)](tests)
+[![tests](https://img.shields.io/badge/tests-75%20passing-2EA043)](tests)
 [![status](https://img.shields.io/badge/status-prototype%20%C2%B7%20BYOK-orange)](#credential-boundary-and-release-decision)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -251,7 +251,7 @@ src/
     dom.ts                 $, escapeHtml, errorMessage helpers
     menu.ts                card context menu (keyboard navigable)
     settings-form.ts       settings panel binding + inline error
-tests/                     node --test specs (43 tests)
+tests/                     node --test specs (75 tests)
 scripts/                   anchor smoke CLI
 .e2e/                      project-local E2E contract (gate.sh + Playwright)
 ```
