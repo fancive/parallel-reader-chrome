@@ -25,11 +25,17 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Setup Chrome
-        id: setup-chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
+      - name: Install Google Chrome
+        id: install-chrome
+        run: |
+          set -euo pipefail
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+            | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+            | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y google-chrome-stable
+          echo "chrome-path=/usr/bin/google-chrome-stable" >> "$GITHUB_OUTPUT"
 
       - name: Install
         run: npm ci
@@ -51,7 +57,7 @@ jobs:
 
       - name: E2E Gate
         env:
-          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_PATH: ${{ steps.install-chrome.outputs.chrome-path }}
           E2E_CONTRACT_VALIDATOR_PYTHONPATH: ${{ github.workspace }}/tools/e2e
         run: xvfb-run -a timeout 600 bash .e2e/gate.sh --json
 
