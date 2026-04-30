@@ -36,6 +36,17 @@ test('provider settings schema supplies usable defaults', () => {
   assert.equal(settings.maxDocChars, 20000);
   assert.equal(settings.summaryLanguage, 'zh-CN');
   assert.equal(settings.cardDensity, 'normal');
+  assert.equal(settings.cacheTtlDays, 7);
+});
+
+test('provider settings schema clamps cacheTtlDays into the allowed range', () => {
+  const tooLow = ProviderSettingsSchema.safeParse({ cacheTtlDays: 0 });
+  const tooHigh = ProviderSettingsSchema.safeParse({ cacheTtlDays: 365 });
+  assert.equal(tooLow.success, false);
+  assert.equal(tooHigh.success, false);
+
+  const ok = ProviderSettingsSchema.parse({ cacheTtlDays: 30 });
+  assert.equal(ok.cacheTtlDays, 30);
 });
 
 test('provider settings schema rejects an inverted card range', () => {

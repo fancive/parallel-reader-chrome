@@ -18,6 +18,8 @@ export async function saveSettings(settings: ProviderSettings): Promise<void> {
 export type SettingsFormDeps = {
   setStatus: (text: string) => void;
   saveSettings: (settings: ProviderSettings) => Promise<void>;
+  clearCurrentPage?: () => Promise<boolean>;
+  clearAllPages?: () => Promise<number>;
 };
 
 function showSettingsError(message: string, deps: SettingsFormDeps): void {
@@ -49,6 +51,7 @@ export function bindSettingsForm(
   $<HTMLSelectElement>('summary-language').value = initial.summaryLanguage;
   $<HTMLSelectElement>('card-density').value = initial.cardDensity;
   $<HTMLInputElement>('max-doc').value = String(initial.maxDocChars);
+  $<HTMLInputElement>('cache-ttl-days').value = String(initial.cacheTtlDays);
 
   $('settings-toggle').addEventListener('click', () => {
     const s = $('settings');
@@ -65,6 +68,7 @@ export function bindSettingsForm(
       summaryLanguage: $<HTMLSelectElement>('summary-language').value,
       cardDensity: $<HTMLSelectElement>('card-density').value,
       maxDocChars: Number($<HTMLInputElement>('max-doc').value),
+      cacheTtlDays: Number($<HTMLInputElement>('cache-ttl-days').value),
     });
     if (!parsed.success) {
       showSettingsError(
@@ -77,4 +81,61 @@ export function bindSettingsForm(
     await deps.saveSettings(parsed.data);
     deps.setStatus('设置已保存');
   });
+
+  bindCacheControls(deps);
+}
+
+function setCacheStatus(text: string): void {
+  const el = document.getElementById('cache-status');
+  if (el) el.textContent = text;
+}
+
+function showInlineConfirm(confirmId: string): void {
+  const el = document.getElementById(confirmId);
+  if (el) el.hidden = false;
+}
+
+function hideInlineConfirm(confirmId: string): void {
+  const el = document.getElementById(confirmId);
+  if (el) el.hidden = true;
+}
+
+function bindCacheControls(deps: SettingsFormDeps): void {
+  const currentBtn = document.getElementById('cache-clear-current');
+  const currentYes = document.getElementById('cache-clear-current-yes');
+  const currentNo = document.getElementById('cache-clear-current-no');
+  if (currentBtn && currentYes && currentNo) {
+    currentBtn.addEventListener('click', () => {
+      setCacheStatus('');
+      showInlineConfirm('cache-clear-current-confirm');
+    });
+    currentNo.addEventListener('click', () => {
+      hideInlineConfirm('cache-clear-current-confirm');
+    });
+    currentYes.addEventListener('click', async () => {
+      hideInlineConfirm('cache-clear-current-confirm');
+      if (!deps.clearCurrentPage) return;
+      const cleared = await deps.clearCurrentPage();
+      setCacheStatus(cleared ? '已清除当前页缓存' : '当前页未保存缓存');
+    });
+  }
+
+  const allBtn = document.getElementById('cache-clear-all');
+  const allYes = document.getElementById('cache-clear-all-yes');
+  const allNo = document.getElementById('cache-clear-all-no');
+  if (allBtn && allYes && allNo) {
+    allBtn.addEventListener('click', () => {
+      setCacheStatus('');
+      showInlineConfirm('cache-clear-all-confirm');
+    });
+    allNo.addEventListener('click', () => {
+      hideInlineConfirm('cache-clear-all-confirm');
+    });
+    allYes.addEventListener('click', async () => {
+      hideInlineConfirm('cache-clear-all-confirm');
+      if (!deps.clearAllPages) return;
+      const removed = await deps.clearAllPages();
+      setCacheStatus(`已清除 ${removed} 项缓存`);
+    });
+  }
 }
