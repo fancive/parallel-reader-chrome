@@ -338,9 +338,14 @@ function renderMeta(meta: Readonly<PageMeta>, used: ExtractedTextVersion): void 
   $('meta-read-len').textContent = `${meta.readabilityTextLength} 字`;
   $('meta-used').textContent = used === 'readability' ? '正文' : '原文';
   $('meta-selected-len').textContent = `${quality.selectedTextLength} 字`;
-  qualityEl.hidden = false;
-  qualityEl.className = `meta-quality ${quality.level}`;
-  qualityEl.textContent = `${quality.label}: ${quality.detail}`;
+  if (quality.level === 'warn') {
+    qualityEl.hidden = false;
+    qualityEl.className = `meta-quality ${quality.level}`;
+    qualityEl.textContent = `${quality.label}: ${quality.detail}`;
+  } else {
+    qualityEl.hidden = true;
+    qualityEl.textContent = '';
+  }
 }
 
 function renderStats(results: readonly CardResult[]): void {
