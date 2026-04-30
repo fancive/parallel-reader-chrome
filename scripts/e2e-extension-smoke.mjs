@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from 'node:fs';
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -347,7 +347,40 @@ async function launchExtension() {
     ],
   };
   context = await chromium.launchPersistentContext(profileDir, launchOptions);
+  await dumpChromeArgs();
   await waitForExtensionId();
+}
+
+async function dumpChromeArgs() {
+  if (process.platform !== 'linux') return;
+  try {
+    const procEntries = await readdir('/proc');
+    for (const entry of procEntries) {
+      if (!/^\d+$/.test(entry)) continue;
+      let comm = '';
+      try {
+        comm = (await readFile(`/proc/${entry}/comm`, 'utf8')).trim();
+      } catch {
+        continue;
+      }
+      if (comm !== 'chrome' && comm !== 'google-chrome') continue;
+      let cmdline = '';
+      try {
+        cmdline = await readFile(`/proc/${entry}/cmdline`, 'utf8');
+      } catch {
+        continue;
+      }
+      const args = cmdline.split('\0').filter(Boolean);
+      const isMain = !args.some((a) => a.startsWith('--type='));
+      if (!isMain) continue;
+      console.error(`[diag] chrome pid=${entry} args:`);
+      for (const arg of args) console.error(`  ${arg}`);
+      return;
+    }
+    console.error('[diag] no chrome main process found in /proc');
+  } catch (error) {
+    console.error('[diag] dumpChromeArgs failed:', error instanceof Error ? error.message : error);
+  }
 }
 
 const ANALYZE_TRIGGER_SELECTOR = '#analyze:visible, #analyze-hero:visible';
