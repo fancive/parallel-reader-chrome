@@ -306,16 +306,32 @@ async function waitForExtensionId() {
       .catch(() => undefined);
     serviceWorker = findExtensionServiceWorker();
   }
-  assert(serviceWorker, 'parallel-reader background service worker did not appear within 10s');
+  if (!serviceWorker) {
+    const observed = context.serviceWorkers().map((sw) => sw.url());
+    assert(
+      false,
+      `parallel-reader background service worker did not appear within 10s; observed=${JSON.stringify(observed)}`,
+    );
+  }
   const url = serviceWorker.url();
   const match = url.match(/^chrome-extension:\/\/([^/]+)\//);
   assert(match, `could not parse extension id from service worker URL: ${url}`);
   extensionId = match[1];
 }
 
+async function seedDeveloperModePreference() {
+  const defaultDir = join(profileDir, 'Default');
+  await mkdir(defaultDir, { recursive: true });
+  const prefs = {
+    extensions: { ui: { developer_mode: true } },
+  };
+  await writeFile(join(defaultDir, 'Preferences'), JSON.stringify(prefs));
+}
+
 async function launchExtension() {
   await rm(profileDir, { recursive: true, force: true });
   await mkdir(profileDir, { recursive: true });
+  await seedDeveloperModePreference();
 
   const executablePath = await resolveChromeExecutable();
   const launchOptions = {
