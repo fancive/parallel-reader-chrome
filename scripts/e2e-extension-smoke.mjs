@@ -293,11 +293,20 @@ async function startFixtureServer() {
   otherUrl = `${serverOrigin}/other.html`;
 }
 
+function findExtensionServiceWorker() {
+  return context.serviceWorkers().find((sw) => sw.url().endsWith('/background.js'));
+}
+
 async function waitForExtensionId() {
-  let serviceWorker = context.serviceWorkers()[0];
-  if (!serviceWorker) {
-    serviceWorker = await context.waitForEvent('serviceworker', { timeout: 10000 });
+  let serviceWorker = findExtensionServiceWorker();
+  const deadline = Date.now() + 10000;
+  while (!serviceWorker && Date.now() < deadline) {
+    await context
+      .waitForEvent('serviceworker', { timeout: deadline - Date.now() })
+      .catch(() => undefined);
+    serviceWorker = findExtensionServiceWorker();
   }
+  assert(serviceWorker, 'parallel-reader background service worker did not appear within 10s');
   const url = serviceWorker.url();
   const match = url.match(/^chrome-extension:\/\/([^/]+)\//);
   assert(match, `could not parse extension id from service worker URL: ${url}`);
@@ -316,6 +325,7 @@ async function launchExtension() {
     args: [
       `--disable-extensions-except=${distDir}`,
       `--load-extension=${distDir}`,
+      '--disable-features=DisableLoadExtensionCommandLineSwitch',
       '--no-first-run',
       '--no-default-browser-check',
     ],
@@ -373,7 +383,7 @@ async function openArticleInFixtureTab(url) {
 }
 
 async function tabIdForUrl(url) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   return sw.evaluate((targetUrl) => {
     return chrome.tabs.query({}).then((tabs) => {
@@ -385,7 +395,7 @@ async function tabIdForUrl(url) {
 }
 
 async function waitForTabScopedSidePanelPath(tabId) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   const expected = `sidepanel.html?tabId=${tabId}`;
   await waitUntil(
@@ -399,7 +409,7 @@ async function waitForTabScopedSidePanelPath(tabId) {
 }
 
 async function enableSidePanelForTab(tabId) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   await sw.evaluate(async (id) => {
     await chrome.sidePanel.setOptions({
@@ -411,7 +421,7 @@ async function enableSidePanelForTab(tabId) {
 }
 
 async function sidePanelSnapshot(tabIds = []) {
-  const sw = context.serviceWorkers()[0];
+  const sw = findExtensionServiceWorker();
   assert(sw, 'service worker not available');
   return sw.evaluate(async (ids) => {
     const manifest = chrome.runtime.getManifest();
@@ -550,7 +560,7 @@ async function main() {
   });
 
   await record('browser action does not use global open-on-click behavior', ['risk:wiring', 'risk:regression'], async () => {
-    const sw = context.serviceWorkers()[0];
+    const sw = findExtensionServiceWorker();
     assert(sw, 'service worker not available');
     const behavior = await sw.evaluate(async () => chrome.sidePanel.getPanelBehavior());
     assert(
@@ -722,7 +732,7 @@ async function main() {
   await record('service worker can ack pending-analyze through side panel listener', ['risk:wiring', 'risk:contract'], async () => {
     providerMode = 'success';
     providerDelayMs = 0;
-    const sw = context.serviceWorkers()[0];
+    const sw = findExtensionServiceWorker();
     assert(sw, 'service worker not available');
     const fixture = await sw.evaluate(async () => {
       const tabs = await chrome.tabs.query({});
@@ -744,7 +754,7 @@ async function main() {
   });
 
   await record('side panel rejects malformed pending-analyze message', ['risk:wiring', 'risk:failure_path'], async () => {
-    const sw = context.serviceWorkers()[0];
+    const sw = findExtensionServiceWorker();
     assert(sw, 'service worker not available');
     const ack = await sw.evaluate(async () => {
       return chrome.runtime.sendMessage({
