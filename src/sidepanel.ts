@@ -488,13 +488,13 @@ function renderPageState(state: PageState): void {
   setCurrentHasSavedResults(true);
   const analyzedAt = new Date(state.analyzedAt).toLocaleTimeString();
   setStatus(
-    `已恢复当前页结果 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处可定位 · ${analyzedAt}`,
+    `已恢复当前页结果 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处亮点可跳转 · ${analyzedAt}`,
   );
 }
 
 function renderCompletedPageState(state: PageState): void {
   renderPageState(state);
-  setStatus(`完成 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处可定位`);
+  setStatus(`完成 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处亮点可跳转`);
 }
 
 function fingerprintSourceText(extracted: Readonly<ExtractResponse>): string {
@@ -541,10 +541,10 @@ async function refreshCurrentPage(): Promise<void> {
     }
     clearRenderedPage();
     if (runningPageKeys.has(page.key)) {
-      setStatus(page.title ? `分析中：${page.title}` : '分析中...');
+      setStatus(page.title ? `正在阅读：${page.title}` : '正在阅读...');
       return;
     }
-    setStatus(page.title ? `当前页未分析：${page.title}` : '当前页未分析');
+    setStatus(page.title ? `等待分析：${page.title}` : '等待分析');
   } catch (error: unknown) {
     if (version !== refreshVersion) return;
     currentPage = null;
@@ -648,14 +648,14 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
 
     if (canRenderAnalysis(version, page)) {
       hideStaleCacheBanner();
-      setStatus(replacingExistingResults ? '重新抽取页面内容...' : '抽取页面内容...');
+      setStatus(replacingExistingResults ? '正在重新整理页面...' : '正在整理页面...');
     }
     const extracted = (await sendToTab(page.tabId, { type: 'extract' }, page.url)) as ExtractResponse;
     const meta = pageMetaFromExtracted(extracted);
     const fingerprint = await computeContentFingerprint(fingerprintSourceText(extracted));
     if (canRenderAnalysis(version, page)) {
       renderMeta(meta, selectExtractedTextVersion(meta.readabilityTextLength));
-      setStatus('调用 LLM...');
+      setStatus('正在阅读这页...');
     }
 
     const resp = (await chrome.runtime.sendMessage({
@@ -671,7 +671,7 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
 
     if (canRenderAnalysis(version, page)) {
       renderMeta(meta, resp.usedText);
-      setStatus(`生成 ${resp.cards.length} 张卡片，定位中...`);
+      setStatus(`找到 ${resp.cards.length} 处亮点，正在标注...`);
     }
 
     const results = await locateAll(page, resp.cards);
@@ -809,7 +809,7 @@ async function init(): Promise<void> {
     }
     if (changeInfo.status === 'loading') {
       clearRenderedPage();
-      setStatus('页面加载中...');
+      setStatus('页面正在加载...');
     }
   });
   chrome.windows.onFocusChanged.addListener(() => {
