@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const tmpRoot = join(process.cwd(), '.tmp');

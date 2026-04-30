@@ -5,7 +5,7 @@
   "description": "Anchor-based summary cards for any web page",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "check": "npm test && npm run lint && npm run typecheck && npm run build && npm audit",
+    "check": "npm run lint && npm test && npm run typecheck && npm run build && npm audit --audit-level=high",
     "dev": "node esbuild.config.mjs --watch",
     "e2e": "bash .e2e/gate.sh",
     "lint": "biome lint src scripts tests esbuild.config.mjs",

@@ -1,7 +1,7 @@
 # Parallel Reader
 
 > LLM-generated summary cards anchored to verbatim quotes on any web page.
-> A tab- and URL-keyed Chrome side panel for slow, evidence-linked reading.
+> A URL-keyed Chrome side panel for slow, evidence-linked reading.
 
 [![Manifest V3](https://img.shields.io/badge/manifest-v3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![Chrome 114+](https://img.shields.io/badge/chrome-%E2%89%A5114-4285F4?logo=googlechrome&logoColor=white)](manifest.json)
@@ -44,8 +44,8 @@ Most LLM "summarize this page" tools produce a paragraph of generated prose
 that you cannot trace back to the original article. Parallel Reader takes the
 opposite approach: every card is a **verbatim quote** from the page plus a
 short LLM gist, and the quote anchors back to the exact location in the live
-DOM so you can jump to it and verify in context. The side panel is keyed by
-tab and URL, so different pages keep separate card state.
+DOM so you can jump to it and verify in context. The side panel stores card
+state by URL, so a page can recover its cards after browser restart.
 
 ## Features
 
@@ -54,8 +54,9 @@ tab and URL, so different pages keep separate card state.
 - **Three-way anchor validation** — every anchor is checked against raw page
   text, Mozilla Readability article text, and a live DOM Range, so you see
   honestly which cards are still locatable.
-- **Per-tab + per-URL cache** — switch pages or tabs without losing cards;
-  rerun replaces the cached result only after a successful analysis.
+- **Persistent per-URL cache** — switch pages, recreate tabs, or restart
+  Chrome without losing cards; rerun replaces the cached result only after a
+  successful analysis.
 - **Copy quote / copy summary** — works even when the live DOM no longer
   matches the cached anchor (DOM-miss cards are still useful for note-taking).
 - **Configurable density and language** — concise / normal / detailed bullet

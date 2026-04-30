@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release Gate and Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and Contract Tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit
+        run: npm audit --audit-level=high
+
+      - name: Checkout E2E Validator
+        uses: actions/checkout@v4
+        with:
+          repository: fancive/claude-code-addons
+          path: _addons
+
+      - name: E2E Gate
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          E2E_CONTRACT_VALIDATOR_PYTHONPATH: ${{ github.workspace }}/_addons/scripts
+        run: xvfb-run -a timeout 600 bash .e2e/gate.sh --json
+
+      - name: Upload E2E Artifacts on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ github.run_id }}
+          path: |
+            .e2e/artifact.json
+            .e2e/evidence/
+
+      - name: Package Extension
+        id: package
+        run: |
+          ref_slug="${GITHUB_REF_NAME//\//-}"
+          zip_name="parallel-reader-chrome-${ref_slug}.zip"
+          rm -f "$zip_name"
+          (cd dist && zip -r "../$zip_name" .)
+          echo "zip=$zip_name" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=parallel-reader-chrome-${ref_slug}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: ${{ steps.package.outputs.zip }}
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.zip }}
+          generate_release_notes: true

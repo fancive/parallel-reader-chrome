@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { createServer } from 'node:http';
 import { constants } from 'node:fs';
 import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 
@@ -12,16 +12,19 @@ const profileDir = join(evidenceDir, 'chrome-profile');
 const artifactPath = join(e2eDir, 'artifact.json');
 const distDir = resolve(root, 'dist');
 const settingsKey = 'parallel-reader-settings';
+const pageStatePrefix = 'parallel-reader-page:';
 
 const tests = [];
 let context;
 let server;
 let serverOrigin = '';
 let baseUrl = '';
+let otherUrl = '';
 let extensionId = '';
 let sidePage;
 let fixturePage;
 let providerMode = 'success';
+let providerDelayMs = 0;
 const providerRequests = [];
 
 async function executableExists(path) {
@@ -72,6 +75,19 @@ function makeError(error) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+async function waitUntil(predicate, message, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await delay(25);
+  }
+  throw new Error(message);
 }
 
 async function record(name, tags, fn) {
@@ -211,6 +227,7 @@ async function handleProviderRequest(req, res) {
     return;
   }
 
+  if (providerDelayMs > 0) await delay(providerDelayMs);
   writeJson(res, 200, {
     choices: [
       {
@@ -235,12 +252,27 @@ async function startFixtureServer() {
       });
       return;
     }
-    if (url.pathname !== '/' && url.pathname !== '/article.html') {
+    if (url.pathname !== '/' && url.pathname !== '/article.html' && url.pathname !== '/other.html') {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('not found');
       return;
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    if (url.pathname === '/other.html') {
+      res.end(`<!doctype html>
+      <html>
+        <head><title>Parallel Reader Other Fixture</title></head>
+        <body>
+          <main>
+            <article>
+              <h1>Parallel Reader Other Fixture</h1>
+              <p>This is a second tab used to verify that a running analysis remains attached to the original page.</p>
+            </article>
+          </main>
+        </body>
+      </html>`);
+      return;
+    }
     res.end(`<!doctype html>
       <html>
         <head><title>Parallel Reader Local Fixture</title></head>
@@ -258,6 +290,7 @@ async function startFixtureServer() {
   const port = await listen(server);
   serverOrigin = `http://127.0.0.1:${port}`;
   baseUrl = `${serverOrigin}/article.html`;
+  otherUrl = `${serverOrigin}/other.html`;
 }
 
 async function waitForExtensionId() {
@@ -297,9 +330,11 @@ function analyzeTrigger() {
   return sidePage.locator(ANALYZE_TRIGGER_SELECTOR).first();
 }
 
-async function openSidePanelPage() {
+async function openSidePanelPage(tabId) {
+  if (sidePage && !sidePage.isClosed()) await sidePage.close();
   sidePage = await context.newPage();
-  await sidePage.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const suffix = tabId === undefined ? '' : `?tabId=${encodeURIComponent(String(tabId))}`;
+  await sidePage.goto(`chrome-extension://${extensionId}/sidepanel.html${suffix}`);
   await analyzeTrigger().waitFor({ state: 'visible', timeout: 5000 });
 }
 
@@ -326,6 +361,121 @@ async function openFixtureArticle() {
   }
   await fixturePage.bringToFront();
   return fixturePage;
+}
+
+async function openArticleInFixtureTab(url) {
+  if (!fixturePage || fixturePage.isClosed()) {
+    fixturePage = await context.newPage();
+  }
+  await fixturePage.goto(url);
+  await fixturePage.bringToFront();
+  return fixturePage;
+}
+
+async function tabIdForUrl(url) {
+  const sw = context.serviceWorkers()[0];
+  assert(sw, 'service worker not available');
+  return sw.evaluate((targetUrl) => {
+    return chrome.tabs.query({}).then((tabs) => {
+      const tab = tabs.find((candidate) => candidate.url === targetUrl);
+      if (!tab?.id) throw new Error(`tab not found for ${targetUrl}`);
+      return tab.id;
+    });
+  }, url);
+}
+
+async function waitForTabScopedSidePanelPath(tabId) {
+  const sw = context.serviceWorkers()[0];
+  assert(sw, 'service worker not available');
+  const expected = `sidepanel.html?tabId=${tabId}`;
+  await waitUntil(
+    async () =>
+      sw.evaluate(async ({ expectedPath, id }) => {
+        const options = await chrome.sidePanel.getOptions({ tabId: id });
+        return options.enabled === true && options.path === expectedPath;
+      }, { expectedPath: expected, id: tabId }),
+    `side panel path was not scoped to tab ${tabId}`,
+  );
+}
+
+async function enableSidePanelForTab(tabId) {
+  const sw = context.serviceWorkers()[0];
+  assert(sw, 'service worker not available');
+  await sw.evaluate(async (id) => {
+    await chrome.sidePanel.setOptions({
+      tabId: id,
+      path: `sidepanel.html?tabId=${id}`,
+      enabled: true,
+    });
+  }, tabId);
+}
+
+async function sidePanelSnapshot(tabIds = []) {
+  const sw = context.serviceWorkers()[0];
+  assert(sw, 'service worker not available');
+  return sw.evaluate(async (ids) => {
+    const manifest = chrome.runtime.getManifest();
+    const globalOptions = await chrome.sidePanel.getOptions({});
+    const tabOptions = {};
+    for (const id of ids) {
+      tabOptions[id] = await chrome.sidePanel.getOptions({ tabId: id });
+    }
+    return {
+      manifestDefaultPath: manifest.side_panel?.default_path ?? null,
+      globalEnabled: globalOptions.enabled ?? null,
+      globalPath: globalOptions.path ?? null,
+      tabOptions,
+    };
+  }, tabIds);
+}
+
+async function pageStateSnapshot(url) {
+  return sidePage.evaluate(
+    async ({ prefix, pageUrl }) => {
+      const key = `${prefix}${pageUrl}`;
+      const [local, session] = await Promise.all([
+        chrome.storage.local.get(key),
+        chrome.storage.session?.get(key) ?? Promise.resolve({}),
+      ]);
+      return {
+        key,
+        localState: local[key] ?? null,
+        sessionState: session[key] ?? null,
+      };
+    },
+    { prefix: pageStatePrefix, pageUrl: url },
+  );
+}
+
+async function openSidePanelFromExtensionGesture(tabId) {
+  await sidePage.evaluate((id) => {
+    delete window.__gestureSidePanelOpenResult;
+    document.querySelector('#gesture-sidepanel-open')?.remove();
+    const button = document.createElement('button');
+    button.id = 'gesture-sidepanel-open';
+    button.addEventListener(
+      'click',
+      () => {
+        const enablePromise = chrome.sidePanel.setOptions({
+          tabId: id,
+          path: `sidepanel.html?tabId=${id}`,
+          enabled: true,
+        });
+        const openPromise = chrome.sidePanel.open({ tabId: id });
+        window.__gestureSidePanelOpenResult = Promise.all([enablePromise, openPromise]).then(
+          () => ({ ok: true }),
+          (error) => ({
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      },
+      { once: true },
+    );
+    document.body.append(button);
+  }, tabId);
+  await sidePage.locator('#gesture-sidepanel-open').click({ timeout: 5000 });
+  return sidePage.evaluate(() => window.__gestureSidePanelOpenResult);
 }
 
 async function configureFakeProvider() {
@@ -381,13 +531,31 @@ async function main() {
     assert(extensionId.length > 10, 'extension id was not discovered');
   });
 
-  await record('side panel behavior is set to open-on-action-click', ['risk:wiring', 'risk:regression'], async () => {
+  await record('side panel has no global fallback path', ['risk:wiring', 'risk:regression'], async () => {
+    let snapshot;
+    await waitUntil(async () => {
+      snapshot = await sidePanelSnapshot();
+      return (
+        snapshot.manifestDefaultPath === null &&
+        snapshot.globalPath === null &&
+        snapshot.globalEnabled === false
+      );
+    }, 'global side panel fallback remained enabled');
+    assert(
+      snapshot.manifestDefaultPath === null,
+      `manifest still defines side_panel.default_path=${snapshot.manifestDefaultPath}`,
+    );
+    assert(snapshot.globalPath === null, `global side panel path remained set: ${snapshot.globalPath}`);
+    assert(snapshot.globalEnabled === false, `global side panel was not disabled: ${snapshot.globalEnabled}`);
+  });
+
+  await record('browser action does not use global open-on-click behavior', ['risk:wiring', 'risk:regression'], async () => {
     const sw = context.serviceWorkers()[0];
     assert(sw, 'service worker not available');
     const behavior = await sw.evaluate(async () => chrome.sidePanel.getPanelBehavior());
     assert(
-      behavior?.openPanelOnActionClick === true,
-      `expected openPanelOnActionClick=true; got ${JSON.stringify(behavior)}`,
+      behavior?.openPanelOnActionClick === false,
+      `expected openPanelOnActionClick=false; got ${JSON.stringify(behavior)}`,
     );
   });
 
@@ -427,8 +595,46 @@ async function main() {
     assert(located.domRange === true, 'anchor did not locate to a DOM Range');
   });
 
+  await record('side panel is disabled on unopened tabs', ['risk:wiring', 'risk:regression'], async () => {
+    const fixtureTabId = await tabIdForUrl(baseUrl);
+    const otherPage = await context.newPage();
+    await otherPage.goto(otherUrl);
+    const otherTabId = await tabIdForUrl(otherUrl);
+    const snapshot = await sidePanelSnapshot([fixtureTabId, otherTabId]);
+    assert(snapshot.tabOptions[fixtureTabId]?.enabled === false, 'fixture tab side panel started enabled');
+    assert(snapshot.tabOptions[fixtureTabId]?.path == null, 'fixture tab side panel started with a path');
+    assert(snapshot.tabOptions[otherTabId]?.enabled === false, 'other tab side panel started enabled');
+    assert(snapshot.tabOptions[otherTabId]?.path == null, 'other tab side panel started with a path');
+  });
+
+  await record('side panel paths are scoped per opened tab', ['risk:wiring', 'risk:regression'], async () => {
+    const fixtureTabId = await tabIdForUrl(baseUrl);
+    await enableSidePanelForTab(fixtureTabId);
+    await waitForTabScopedSidePanelPath(fixtureTabId);
+    const otherTabId = await tabIdForUrl(otherUrl);
+    let snapshot = await sidePanelSnapshot([fixtureTabId, otherTabId]);
+    assert(snapshot.tabOptions[otherTabId]?.enabled === false, 'unopened other tab became enabled');
+    assert(snapshot.tabOptions[otherTabId]?.path == null, 'unopened other tab got a side panel path');
+    await enableSidePanelForTab(otherTabId);
+    await waitForTabScopedSidePanelPath(otherTabId);
+    snapshot = await sidePanelSnapshot([fixtureTabId, otherTabId]);
+    const fixturePath = snapshot.tabOptions[fixtureTabId]?.path;
+    const otherPath = snapshot.tabOptions[otherTabId]?.path;
+    assert(fixturePath === `sidepanel.html?tabId=${fixtureTabId}`, `unexpected fixture tab path: ${fixturePath}`);
+    assert(otherPath === `sidepanel.html?tabId=${otherTabId}`, `unexpected other tab path: ${otherPath}`);
+    assert(fixturePath !== otherPath, 'two tabs shared the same side panel path');
+    await openSidePanelPage(fixtureTabId);
+  });
+
+  await record('side panel opens when options and open share one user gesture', ['risk:wiring', 'risk:regression'], async () => {
+    const fixtureTabId = await tabIdForUrl(baseUrl);
+    const result = await openSidePanelFromExtensionGesture(fixtureTabId);
+    assert(result?.ok === true, `sidePanel.open failed from a user gesture: ${result?.error}`);
+  });
+
   await record('fake provider analysis renders anchored cards', ['risk:boundary_io', 'risk:wiring', 'risk:contract', 'risk:regression'], async () => {
     providerMode = 'success';
+    providerDelayMs = 0;
     providerRequests.length = 0;
     await configureFakeProvider();
     await openFixtureArticle();
@@ -446,8 +652,35 @@ async function main() {
     assert(request.messageCount === 2, `unexpected provider message count: ${request.messageCount}`);
   });
 
+  await record('analysis state is persisted by URL in local storage', ['risk:regression', 'risk:resource_lifecycle'], async () => {
+    const snapshot = await pageStateSnapshot(baseUrl);
+    assert(snapshot.localState, `missing local page state at ${snapshot.key}`);
+    assert(snapshot.localState.page?.key === baseUrl, `unexpected page state key: ${snapshot.localState.page?.key}`);
+    assert(snapshot.localState.page?.url === baseUrl, `unexpected page state URL: ${snapshot.localState.page?.url}`);
+    assert(snapshot.sessionState === null, 'page state was written to session storage');
+  });
+
+  await record('analysis state restores for the same URL after tab recreation', ['risk:regression', 'risk:resource_lifecycle'], async () => {
+    const requestsBefore = providerRequests.length;
+    if (fixturePage && !fixturePage.isClosed()) await fixturePage.close();
+    fixturePage = undefined;
+    await openFixtureArticle();
+    const newTabId = await tabIdForUrl(baseUrl);
+    await enableSidePanelForTab(newTabId);
+    await openSidePanelPage(newTabId);
+    await sidePage.waitForFunction(
+      () => document.querySelector('#status')?.textContent?.includes('已恢复当前页结果'),
+      null,
+      { timeout: 5000 },
+    );
+    const cardCount = await sidePage.locator('.card').count();
+    assert(cardCount === 2, `expected 2 restored cards, got ${cardCount}`);
+    assert(providerRequests.length === requestsBefore, 'restore path unexpectedly called provider again');
+  });
+
   await record('provider failure preserves existing rendered cards', ['risk:failure_path', 'risk:regression'], async () => {
     providerMode = 'error';
+    providerDelayMs = 0;
     await openFixtureArticle();
     await triggerAnalysisWithoutChangingActiveTab();
     await sidePage.waitForFunction(
@@ -459,6 +692,28 @@ async function main() {
     assert(cardCount === 2, `provider failure cleared existing cards; count=${cardCount}`);
   });
 
+  await record('analysis remains attached to its tab while another tab is active', ['risk:failure_path', 'risk:regression', 'risk:wiring'], async () => {
+    providerMode = 'success';
+    providerDelayMs = 500;
+    providerRequests.length = 0;
+    const switchUrl = `${baseUrl}?case=switch-away`;
+    await openArticleInFixtureTab(switchUrl);
+    const fixtureTabId = await tabIdForUrl(switchUrl);
+    await enableSidePanelForTab(fixtureTabId);
+    await waitForTabScopedSidePanelPath(fixtureTabId);
+    await openSidePanelPage(fixtureTabId);
+    await configureFakeProvider();
+    await triggerAnalysisWithoutChangingActiveTab();
+    await waitUntil(() => providerRequests.length === 1, 'fake provider was not called');
+    const otherPage = await context.newPage();
+    await otherPage.goto(otherUrl);
+    await otherPage.bringToFront();
+    await delay(providerDelayMs + 250);
+    await fixturePage.bringToFront();
+    await waitForCompletedCards(2);
+    providerDelayMs = 0;
+  });
+
   // The pending-analyze message is what background's command handler (Alt+Shift+R)
   // emits to the side panel. Playwright cannot fire a real Chrome global shortcut,
   // so we exercise the consumer wire from the service worker (the same context
@@ -466,13 +721,14 @@ async function main() {
   // tests/pending-analyze.test.mjs (buildPendingAnalyzeRequest).
   await record('service worker can ack pending-analyze through side panel listener', ['risk:wiring', 'risk:contract'], async () => {
     providerMode = 'success';
+    providerDelayMs = 0;
     const sw = context.serviceWorkers()[0];
     assert(sw, 'service worker not available');
-    const fixtureTabId = await sw.evaluate(async () => {
+    const fixture = await sw.evaluate(async () => {
       const tabs = await chrome.tabs.query({});
-      const fixture = tabs.find((t) => t.url?.includes('/article.html'));
-      if (!fixture?.id) throw new Error('fixture tab not found');
-      return fixture.id;
+      const tab = tabs.find((t) => t.url?.includes('/article.html'));
+      if (!tab?.id || !tab.url) throw new Error('fixture tab not found');
+      return { tabId: tab.id, url: tab.url };
     });
     const ack = await sw.evaluate(
       async ({ tabId, url }) => {
@@ -481,7 +737,7 @@ async function main() {
           request: { tabId, url, nonce: `e2e-ok-${Date.now()}`, ts: Date.now() },
         });
       },
-      { tabId: fixtureTabId, url: baseUrl },
+      fixture,
     );
     assert(ack && ack.ok === true, `expected ack.ok=true, got: ${JSON.stringify(ack)}`);
     await waitForCompletedCards(2);

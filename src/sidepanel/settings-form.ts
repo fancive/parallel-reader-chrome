@@ -1,6 +1,6 @@
-import { ProviderSettingsSchema, type ProviderSettings, SETTINGS_KEY } from '../shared/types';
-import { $ } from './dom';
 import { logWarn } from '../shared/logger';
+import { type ProviderSettings, ProviderSettingsSchema, SETTINGS_KEY } from '../shared/types';
+import { $ } from './dom';
 
 export async function loadSettings(): Promise<ProviderSettings> {
   const stored = await chrome.storage.local.get(SETTINGS_KEY);

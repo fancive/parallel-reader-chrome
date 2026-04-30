@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const tmpRoot = join(process.cwd(), '.tmp');
@@ -35,7 +35,7 @@ test('pageIdentityFromTab returns identity for a normal tab', () => {
   assert.equal(id.tabId, 7);
   assert.equal(id.url, 'https://example.com/article');
   assert.equal(id.title, 'Demo');
-  assert.equal(id.key, buildPageKey(7, 'https://example.com/article'));
+  assert.equal(id.key, buildPageKey('https://example.com/article'));
 });
 
 test('pageIdentityFromTab throws on missing tab id', () => {
@@ -50,13 +50,24 @@ test('pageIdentityFromTab throws on chrome:// urls', () => {
   assert.throws(() => pageIdentityFromTab({ id: 1, url: 'chrome://extensions' }));
 });
 
-test('buildPageKey is stable for the same input', () => {
+test('buildPageKey is stable for the same URL across tab ids', () => {
+  const first = pageIdentityFromTab({
+    id: 1,
+    url: 'https://example.com/article',
+    title: 'First',
+  });
+  const second = pageIdentityFromTab({
+    id: 2,
+    url: 'https://example.com/article',
+    title: 'Second',
+  });
+  assert.equal(first.key, second.key);
   assert.equal(
-    buildPageKey(1, 'https://example.com/'),
-    buildPageKey(1, 'https://example.com/'),
+    buildPageKey('https://example.com/'),
+    buildPageKey('https://example.com/'),
   );
   assert.notEqual(
-    buildPageKey(1, 'https://example.com/a'),
-    buildPageKey(1, 'https://example.com/b'),
+    buildPageKey('https://example.com/a'),
+    buildPageKey('https://example.com/b'),
   );
 });

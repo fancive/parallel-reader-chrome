@@ -19,10 +19,10 @@ import {
   type ProviderSettings,
 } from './shared/types';
 import { renderCard, setActiveCard } from './sidepanel/card-view';
-import { type PageIdentity, pageIdentityFromTab } from './sidepanel/page-identity';
 import { debounce, runWithConcurrency } from './sidepanel/concurrency';
 import { $, errorMessage } from './sidepanel/dom';
 import { closeCardMenu, showCardMenu } from './sidepanel/menu';
+import { type PageIdentity, pageIdentityFromTab } from './sidepanel/page-identity';
 import { bindSettingsForm, loadSettings, saveSettings } from './sidepanel/settings-form';
 
 const DEBUG_MODE_KEY = 'parallel-reader-debug-mode';
@@ -31,6 +31,16 @@ const THEMES = ['paper', 'dark', 'cloud'] as const;
 type Theme = (typeof THEMES)[number];
 const PENDING_NONCE_CAP = 64;
 const seenNonces = new Map<string, number>();
+const runningPageKeys = new Set<string>();
+
+function boundTabId(): number | null {
+  const raw = new URLSearchParams(window.location.search).get('tabId');
+  if (!raw) return null;
+  const tabId = Number(raw);
+  return Number.isInteger(tabId) && tabId >= 0 ? tabId : null;
+}
+
+const panelTabId = boundTabId();
 
 async function sendToTab<T>(tabId: number, message: unknown, pageUrl?: string): Promise<T> {
   try {
@@ -160,14 +170,20 @@ type PageState = {
   analyzedAt: number;
 };
 
-const pageStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
+const pageStateStorage: chrome.storage.StorageArea = chrome.storage.local;
+const pendingAnalyzeStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
+const legacyPageStateStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
 
 let currentPage: PageIdentity | null = null;
 let currentHasSavedResults = false;
-let analyzeBusy = false;
 let renderVersion = 0;
+let refreshVersion = 0;
 
 async function activePage(): Promise<PageIdentity> {
+  if (panelTabId !== null) {
+    const tab = await chrome.tabs.get(panelTabId);
+    return pageIdentityFromTab(tab);
+  }
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab) throw new Error('找不到活动标签页');
   return pageIdentityFromTab(tab);
@@ -181,14 +197,32 @@ async function pageFromForcedRequest(
   return pageIdentityFromTab(tab);
 }
 
-async function loadPageState(pageKey: string): Promise<PageState | null> {
-  const storageKey = `${PAGE_STATE_PREFIX}${pageKey}`;
-  const stored = await pageStorage.get(storageKey);
-  return ((stored as Record<string, unknown>)[storageKey] as PageState | undefined) ?? null;
+function pageStateStorageKey(pageKey: string): string {
+  return `${PAGE_STATE_PREFIX}${pageKey}`;
+}
+
+function legacyPageStateStorageKey(tabId: number, url: string): string {
+  return `${PAGE_STATE_PREFIX}${tabId}:${url}`;
+}
+
+async function loadPageState(page: Readonly<PageIdentity>): Promise<PageState | null> {
+  const storageKey = pageStateStorageKey(page.key);
+  const stored = await pageStateStorage.get(storageKey);
+  const state = (stored as Record<string, unknown>)[storageKey] as PageState | undefined;
+  if (state) return state;
+
+  const legacyKey = legacyPageStateStorageKey(page.tabId, page.url);
+  const legacyStored = await legacyPageStateStorage.get(legacyKey);
+  const legacyState = (legacyStored as Record<string, unknown>)[legacyKey] as PageState | undefined;
+  if (!legacyState) return null;
+
+  const migrated = { ...legacyState, page };
+  await savePageState(migrated);
+  return migrated;
 }
 
 async function savePageState(state: PageState): Promise<void> {
-  await pageStorage.set({ [`${PAGE_STATE_PREFIX}${state.page.key}`]: state });
+  await pageStateStorage.set({ [pageStateStorageKey(state.page.key)]: state });
 }
 
 function clearRenderedPage(): void {
@@ -212,6 +246,7 @@ function updateAnalyzeButton(): void {
   const button = $<HTMLButtonElement>('analyze');
   const hero = $<HTMLButtonElement>('analyze-hero');
   const heroLabel = hero.querySelector<HTMLElement>('.hero-action-label');
+  const analyzeBusy = currentPage ? runningPageKeys.has(currentPage.key) : false;
   button.disabled = analyzeBusy;
   hero.disabled = analyzeBusy;
   button.textContent = analyzeBusy
@@ -234,13 +269,18 @@ function setCurrentHasSavedResults(hasSavedResults: boolean): void {
   updateAnalyzeButton();
 }
 
-function setAnalyzeBusy(busy: boolean): void {
-  analyzeBusy = busy;
-  updateAnalyzeButton();
+function setPageBusy(pageKey: string, busy: boolean): void {
+  if (busy) runningPageKeys.add(pageKey);
+  else runningPageKeys.delete(pageKey);
+  if (currentPage?.key === pageKey) updateAnalyzeButton();
 }
 
 function invalidatePendingRender(): void {
   renderVersion++;
+}
+
+function canRenderAnalysis(version: number, page: Readonly<PageIdentity>): boolean {
+  return version === renderVersion && currentPage?.key === page.key;
 }
 
 async function highlightCardAnchor(
@@ -336,21 +376,30 @@ function renderPageState(state: PageState): void {
   );
 }
 
+function renderCompletedPageState(state: PageState): void {
+  renderPageState(state);
+  setStatus(`完成 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处可定位`);
+}
+
 async function refreshCurrentPage(): Promise<void> {
-  const version = ++renderVersion;
+  const version = ++refreshVersion;
   try {
     const page = await activePage();
     currentPage = page;
-    const cached = await loadPageState(page.key);
-    if (version !== renderVersion) return;
+    const cached = await loadPageState(page);
+    if (version !== refreshVersion) return;
     if (cached) {
       renderPageState(cached);
       return;
     }
     clearRenderedPage();
+    if (runningPageKeys.has(page.key)) {
+      setStatus(page.title ? `分析中：${page.title}` : '分析中...');
+      return;
+    }
     setStatus(page.title ? `当前页未分析：${page.title}` : '当前页未分析');
   } catch (error: unknown) {
-    if (version !== renderVersion) return;
+    if (version !== refreshVersion) return;
     currentPage = null;
     clearRenderedPage();
     const msg = error instanceof Error ? error.message : 'unknown error';
@@ -436,24 +485,30 @@ function pruneNonces(): void {
 
 async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
   if (forced && !noteNonce(forced.nonce, forced.ts)) return;
-  const replacingExistingResults = currentHasSavedResults;
-  setAnalyzeBusy(true);
-  if (!replacingExistingResults) clearRenderedPage();
   const version = ++renderVersion;
+  let page: PageIdentity | null = null;
 
   try {
     if (!(await ensureProviderReady())) return;
 
-    setStatus(replacingExistingResults ? '重新抽取页面内容...' : '抽取页面内容...');
     const resolved = await resolveAnalysisPage(forced);
     if (!resolved) return;
-    const page = resolved;
+    page = resolved;
     currentPage = page;
+    const replacingExistingResults = Boolean(await loadPageState(page));
+    setPageBusy(page.key, true);
+    if (!replacingExistingResults) clearRenderedPage();
+
+    if (canRenderAnalysis(version, page)) {
+      setStatus(replacingExistingResults ? '重新抽取页面内容...' : '抽取页面内容...');
+    }
     const extracted = (await sendToTab(page.tabId, { type: 'extract' }, page.url)) as ExtractResponse;
     const meta = pageMetaFromExtracted(extracted);
-    renderMeta(meta, selectExtractedTextVersion(meta.readabilityTextLength));
+    if (canRenderAnalysis(version, page)) {
+      renderMeta(meta, selectExtractedTextVersion(meta.readabilityTextLength));
+      setStatus('调用 LLM...');
+    }
 
-    setStatus('调用 LLM...');
     const resp = (await chrome.runtime.sendMessage({
       type: 'analyze',
       rawText: extracted.rawText,
@@ -461,12 +516,14 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     })) as AnalyzeResponse;
 
     if (!resp.ok) {
-      setStatus(`错误: ${resp.error}`);
+      if (canRenderAnalysis(version, page)) setStatus(`错误: ${resp.error}`);
       return;
     }
 
-    renderMeta(meta, resp.usedText);
-    setStatus(`生成 ${resp.cards.length} 张卡片，定位中...`);
+    if (canRenderAnalysis(version, page)) {
+      renderMeta(meta, resp.usedText);
+      setStatus(`生成 ${resp.cards.length} 张卡片，定位中...`);
+    }
 
     const results = await locateAll(page, resp.cards);
     const state: PageState = {
@@ -476,17 +533,15 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
       results,
       analyzedAt: Date.now(),
     };
-    if (version !== renderVersion || currentPage?.key !== page.key) return;
     await savePageState(state);
-    if (version === renderVersion && currentPage?.key === page.key) {
-      renderPageState(state);
-      setStatus(`完成 · ${results.length} 张卡片 · ${countDomHits(results)} 处可定位`);
+    if (canRenderAnalysis(version, page)) {
+      renderCompletedPageState(state);
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(`错误: ${msg}`);
+    if (!page || canRenderAnalysis(version, page)) setStatus(`错误: ${msg}`);
   } finally {
-    setAnalyzeBusy(false);
+    if (page) setPageBusy(page.key, false);
   }
 }
 
@@ -497,9 +552,8 @@ function applyZoom(factor: number): void {
 
 async function syncZoomFromActiveTab(): Promise<void> {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (typeof tab?.id !== 'number') return;
-    const factor = await chrome.tabs.getZoom(tab.id);
+    const page = await activePage();
+    const factor = await chrome.tabs.getZoom(page.tabId);
     applyZoom(factor);
   } catch {
     // tab may not be queryable (restricted page); leave zoom at default
@@ -507,12 +561,13 @@ async function syncZoomFromActiveTab(): Promise<void> {
 }
 
 async function consumePendingAnalyze(): Promise<PendingAnalyzeRequest | null> {
-  const stored = await pageStorage.get(PENDING_ANALYZE_KEY);
+  const stored = await pendingAnalyzeStorage.get(PENDING_ANALYZE_KEY);
   const raw = (stored as Record<string, unknown>)[PENDING_ANALYZE_KEY];
   if (raw === undefined) return null;
-  await pageStorage.remove(PENDING_ANALYZE_KEY);
   const parsed = PendingAnalyzeRequestSchema.safeParse(raw);
   if (!parsed.success) return null;
+  if (panelTabId !== null && parsed.data.tabId !== panelTabId) return null;
+  await pendingAnalyzeStorage.remove(PENDING_ANALYZE_KEY);
   if (Date.now() - parsed.data.ts > PENDING_ANALYZE_TTL_MS) return null;
   return parsed.data;
 }
@@ -550,6 +605,7 @@ async function init(): Promise<void> {
         sendResponse({ ok: false, error: parsed.error.message } satisfies PendingAnalyzeAck);
         return false;
       }
+      if (panelTabId !== null && parsed.data.tabId !== panelTabId) return false;
       sendResponse({ ok: true } satisfies PendingAnalyzeAck);
       void runAnalysis(parsed.data);
       return false;
@@ -565,11 +621,13 @@ async function init(): Promise<void> {
     }
   });
   chrome.tabs.onActivated.addListener(() => {
+    if (panelTabId !== null) return;
     debouncedRefresh();
     void syncZoomFromActiveTab();
   });
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    if (currentPage?.tabId !== tabId) return;
+    const trackedTabId = currentPage?.tabId ?? panelTabId;
+    if (trackedTabId !== tabId) return;
     if (changeInfo.url || changeInfo.status === 'loading' || changeInfo.status === 'complete') {
       invalidatePendingRender();
     }

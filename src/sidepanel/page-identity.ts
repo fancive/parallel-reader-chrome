@@ -7,8 +7,8 @@ export type PageIdentity = {
   key: string;
 };
 
-export function buildPageKey(tabId: number, url: string): string {
-  return `${tabId}:${url}`;
+export function buildPageKey(url: string): string {
+  return url;
 }
 
 export function pageIdentityFromTab(tab: chrome.tabs.Tab): PageIdentity {
@@ -20,6 +20,6 @@ export function pageIdentityFromTab(tab: chrome.tabs.Tab): PageIdentity {
     tabId: tab.id,
     url: tab.url,
     title: tab.title ?? '',
-    key: buildPageKey(tab.id, tab.url),
+    key: buildPageKey(tab.url),
   };
 }

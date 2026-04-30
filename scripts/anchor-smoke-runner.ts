@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import { build } from 'esbuild';
 import { matchAnchor } from '../src/shared/anchor';
 import { callProvider } from '../src/shared/provider';
-import { ProviderSettingsSchema, type Card, type ExtractResponse } from '../src/shared/types';
+import { type Card, type ExtractResponse, ProviderSettingsSchema } from '../src/shared/types';
 
 type CliOptions = {
   urls: string[];

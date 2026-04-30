@@ -9,9 +9,6 @@
   "action": {
     "default_title": "Parallel Reader"
   },
-  "side_panel": {
-    "default_path": "sidepanel.html"
-  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

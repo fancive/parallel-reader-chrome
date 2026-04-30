@@ -1,6 +1,7 @@
 import { Readability } from '@mozilla/readability';
 import { matchAnchor } from './shared/anchor';
 import { locateRangeForText } from './shared/dom-anchor';
+import { logWarn } from './shared/logger';
 import type {
   ExtractRequest,
   ExtractResponse,
@@ -8,7 +9,6 @@ import type {
   LocateRequest,
   LocateResponse,
 } from './shared/types';
-import { logWarn } from './shared/logger';
 
 const HIGHLIGHT_STYLE_ID = 'parallel-reader-highlight-style';
 const OVERLAY_ID = 'parallel-reader-overlay-spike';

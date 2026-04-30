@@ -1,7 +1,7 @@
-import { build, context } from 'esbuild';
 import { copyFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build, context } from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const watch = process.argv.includes('--watch');

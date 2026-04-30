@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const tempDir = await mkdtemp(join(tmpdir(), 'parallel-reader-anchor-repair-'));

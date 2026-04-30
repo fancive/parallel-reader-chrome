@@ -1,6 +1,6 @@
 import type { Card, LocateResponse } from '../shared/types';
-import { $ } from './dom';
 import { copyText } from './clipboard';
+import { $ } from './dom';
 
 type CardResult = { card: Card; locate: LocateResponse };
 
