@@ -19,6 +19,8 @@ echo "[e2e:linux] image: ${IMAGE}"
 # Mount the repo, mask host node_modules with an anonymous volume so the
 # container's `npm ci` does not overwrite the host's macOS binaries.
 docker run --rm -t \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
   -v "$PWD":/app \
   -v /app/node_modules \
   -w /app \
@@ -27,7 +29,13 @@ docker run --rm -t \
   bash -c '
     set -euo pipefail
     apt-get update >/dev/null
-    apt-get install -y --no-install-recommends python3 python-is-python3 python3-yaml >/dev/null
+    apt-get install -y --no-install-recommends python3 python-is-python3 python3-yaml dbus-x11 >/dev/null
+    cleanup() {
+      chown -R "${HOST_UID}:${HOST_GID}" /app/.e2e /app/dist >/dev/null 2>&1 || true
+    }
+    trap cleanup EXIT
+    mkdir -p /run/dbus
+    dbus-daemon --system --fork
     npm ci
-    xvfb-run -a npm run e2e
+    dbus-run-session -- xvfb-run -a npm run e2e
   '
