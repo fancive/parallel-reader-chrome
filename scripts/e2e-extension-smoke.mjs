@@ -5,6 +5,8 @@ import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 
+process.env.PW_CHROMIUM_ATTACH_TO_OTHER ??= '1';
+
 const root = process.cwd();
 const e2eDir = join(root, '.e2e');
 const evidenceDir = join(e2eDir, 'evidence', 'extension-smoke');
