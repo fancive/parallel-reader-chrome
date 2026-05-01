@@ -52,7 +52,17 @@ export type LocaleKey =
   | 'settingsCheckInput'
   | 'settingsSaved'
   | 'cacheStatusNoCache'
-  | 'cacheStatusClearedCount';
+  | 'cacheStatusClearedCount'
+  | 'menuHighlight'
+  | 'menuCopyQuote'
+  | 'menuCopiedQuote'
+  | 'menuCopySummary'
+  | 'menuCopiedSummary'
+  | 'historyCardsCount'
+  | 'historyOpen'
+  | 'historyExportMarkdown'
+  | 'historyDelete'
+  | 'historyDeleteConfirm';
 
 export function t(key: LocaleKey, substitutions?: string | readonly string[]): string {
   if (typeof chrome === 'undefined' || !chrome.i18n?.getMessage) {

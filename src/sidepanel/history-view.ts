@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n';
 import {
   type HistoryEntry,
   formatAnalyzedAt,
@@ -41,27 +42,27 @@ function renderHistoryItem(
   item.appendChild(urlEl);
 
   const stamp = formatAnalyzedAt(entry.analyzedAt);
-  const cardCountText = `${entry.cardCount} 张卡片`;
+  const cardCountText = t('historyCardsCount', [entry.cardCount.toString()]);
   const metaEl = makeMetaLine(`${stamp} · ${cardCountText}`, 'history-meta');
   item.appendChild(metaEl);
 
   const actions = document.createElement('div');
   actions.className = 'history-item-actions';
 
-  const openBtn = makeActionButton('打开', 'history-action');
+  const openBtn = makeActionButton(t('historyOpen'), 'history-action');
   openBtn.addEventListener('click', () => {
     void deps.onOpen(entry);
   });
   actions.appendChild(openBtn);
 
-  const exportBtn = makeActionButton('导出 Markdown', 'history-action');
+  const exportBtn = makeActionButton(t('historyExportMarkdown'), 'history-action');
   exportBtn.disabled = entry.cardCount === 0;
   exportBtn.addEventListener('click', () => {
     void deps.onExport(entry);
   });
   actions.appendChild(exportBtn);
 
-  const deleteBtn = makeActionButton('删除', 'history-action history-action-danger');
+  const deleteBtn = makeActionButton(t('historyDelete'), 'history-action history-action-danger');
   deleteBtn.dataset.state = 'idle';
   deleteBtn.addEventListener('click', () => {
     if (deleteBtn.dataset.state === 'confirm') {
@@ -70,11 +71,11 @@ function renderHistoryItem(
       return;
     }
     deleteBtn.dataset.state = 'confirm';
-    deleteBtn.textContent = '确认删除';
+    deleteBtn.textContent = t('historyDeleteConfirm');
     setTimeout(() => {
       if (deleteBtn.dataset.state === 'confirm') {
         deleteBtn.dataset.state = 'idle';
-        deleteBtn.textContent = '删除';
+        deleteBtn.textContent = t('historyDelete');
       }
     }, 3000);
   });

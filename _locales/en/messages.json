@@ -134,5 +134,26 @@
   "cacheStatusClearedCount": {
     "message": "Cleared $1 cached entries.",
     "description": "$1 = number of cleared entries"
-  }
+  },
+
+  "menuHighlight": { "message": "Highlight" },
+  "menuCopyQuote": { "message": "Copy quote" },
+  "menuCopiedQuote": {
+    "message": "Copied quote #$1",
+    "description": "$1 = 1-based card index"
+  },
+  "menuCopySummary": { "message": "Copy summary" },
+  "menuCopiedSummary": {
+    "message": "Copied summary #$1",
+    "description": "$1 = 1-based card index"
+  },
+
+  "historyCardsCount": {
+    "message": "$1 cards",
+    "description": "$1 = card count for one history entry"
+  },
+  "historyOpen": { "message": "Open" },
+  "historyExportMarkdown": { "message": "Export Markdown" },
+  "historyDelete": { "message": "Delete" },
+  "historyDeleteConfirm": { "message": "Confirm delete" }
 }

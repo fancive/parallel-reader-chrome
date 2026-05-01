@@ -68,5 +68,17 @@
   "settingsCheckInput": { "message": "请检查输入" },
   "settingsSaved": { "message": "设置已保存" },
   "cacheStatusNoCache": { "message": "当前页未保存缓存" },
-  "cacheStatusClearedCount": { "message": "已清除 $1 项缓存" }
+  "cacheStatusClearedCount": { "message": "已清除 $1 项缓存" },
+
+  "menuHighlight": { "message": "高亮定位" },
+  "menuCopyQuote": { "message": "复制引用" },
+  "menuCopiedQuote": { "message": "已复制引用 #$1" },
+  "menuCopySummary": { "message": "复制摘要" },
+  "menuCopiedSummary": { "message": "已复制摘要 #$1" },
+
+  "historyCardsCount": { "message": "$1 张卡片" },
+  "historyOpen": { "message": "打开" },
+  "historyExportMarkdown": { "message": "导出 Markdown" },
+  "historyDelete": { "message": "删除" },
+  "historyDeleteConfirm": { "message": "确认删除" }
 }

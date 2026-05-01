@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n';
 import type { Card, LocateResponse } from '../shared/types';
 import { copyText } from './clipboard';
 import { $ } from './dom';
@@ -106,16 +107,16 @@ export function showCardMenu(
   title.textContent = `#${index + 1}`;
   menu.appendChild(title);
 
-  appendMenuButton(menu, '高亮定位', !canHighlight, () =>
+  appendMenuButton(menu, t('menuHighlight'), !canHighlight, () =>
     deps.highlightCardAnchor(card.anchor, index, canHighlight),
   );
-  appendMenuButton(menu, '复制引用', false, async () => {
+  appendMenuButton(menu, t('menuCopyQuote'), false, async () => {
     closeCardMenu();
-    await copyText(card.anchor, `已复制引用 #${index + 1}`, deps.setStatus);
+    await copyText(card.anchor, t('menuCopiedQuote', [(index + 1).toString()]), deps.setStatus);
   });
-  appendMenuButton(menu, '复制摘要', false, async () => {
+  appendMenuButton(menu, t('menuCopySummary'), false, async () => {
     closeCardMenu();
-    await copyText(cardSummaryText(card, index), `已复制摘要 #${index + 1}`, deps.setStatus);
+    await copyText(cardSummaryText(card, index), t('menuCopiedSummary', [(index + 1).toString()]), deps.setStatus);
   });
 
   menu.onkeydown = (event) => handleMenuKeydown(event, menu);
