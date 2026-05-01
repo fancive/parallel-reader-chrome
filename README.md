@@ -8,7 +8,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Biome](https://img.shields.io/badge/lint-Biome-60A5FA?logo=biome&logoColor=white)](biome.json)
 [![esbuild](https://img.shields.io/badge/build-esbuild-FFCF00?logo=esbuild&logoColor=black)](esbuild.config.mjs)
-[![tests](https://img.shields.io/badge/tests-93%20passing-2EA043)](tests)
+[![tests](https://img.shields.io/badge/tests-97%20passing-2EA043)](tests)
 [![status](https://img.shields.io/badge/status-prototype%20%C2%B7%20BYOK-orange)](#credential-boundary-and-release-decision)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -65,6 +65,12 @@ state by URL, so a page can recover its cards after browser restart.
   the whole library as Markdown / JSON.
 - **Copy quote / copy summary** — works even when the live DOM no longer
   matches the cached anchor (DOM-miss cards are still useful for note-taking).
+- **Bilingual UI (English / Simplified Chinese)** — the side panel,
+  manifest, and shortcut description all flow through `chrome.i18n`. A
+  Settings dropdown lets you override the interface language
+  independently of the LLM-output language; auto follows the browser
+  locale. New keys land in `_locales/en/messages.json` first and a
+  parity test guards that `_locales/zh_CN/messages.json` stays in sync.
 - **Configurable density and language** — concise / normal / detailed bullet
   budget; Chinese or English summaries.
 - **Configurable card count** — request between 4 and 10 cards per analysis.
@@ -220,7 +226,8 @@ is replaced and reviewed.
 ```bash
 npm run dev        # watch build into dist/
 npm run build      # production-style local build
-npm run check      # test + lint + typecheck + build + audit
+npm run check      # lint + check:no-cjk + test + typecheck + build + audit
+npm run check:no-cjk  # fail when src/ contains hard-coded CJK outside the allow-list
 npm run e2e        # project-local .e2e contract gate (Playwright)
 npm run e2e:linux  # same gate inside a Linux container (mirrors CI Chromium-for-Testing)
 npm run lint       # Biome lint baseline for src/, scripts/, tests/, build config
@@ -245,6 +252,7 @@ src/
     anchor-repair.ts       fuzzy fallback for anchor location
     dom-anchor.ts          DOM Range builder for the content script
     extraction-quality.ts  raw / readable / selected text classification
+    i18n.ts                typed t() wrapper + applyI18n DOM bootstrap + locale override
     json-extract.ts        defensive JSON parsing for provider responses
     logger.ts              debug-flag-gated console.warn shim
     page-support.ts        URL/protocol allow-list for the side panel
@@ -261,10 +269,11 @@ src/
     menu.ts                card context menu (keyboard navigable)
     page-identity.ts       URL normalization for cache key
     settings-form.ts       settings panel binding + inline error
-tests/                     node --test specs (93 tests)
-scripts/                   anchor smoke CLI + e2e-linux container helper
+tests/                     node --test specs (97 tests)
+scripts/                   anchor smoke CLI + e2e-linux container helper + check-no-cjk guard
 tools/e2e/                 vendored e2e_contract_validator (Python, gate-only)
 .e2e/                      project-local E2E contract (gate.sh + Playwright)
+_locales/                  chrome.i18n message bundles (en + zh_CN)
 ```
 
 ## E2E Contract
@@ -281,6 +290,39 @@ side-panel page, verifies the first-run provider setup guard, and checks
 that the content script can extract and locate fixture article text without
 provider credentials. Generated CTRF evidence is written to
 `.e2e/artifact.json`.
+
+## Localization (i18n)
+
+UI strings live in `_locales/<locale>/messages.json` and flow through
+`chrome.i18n.getMessage` via the typed `t()` helper in
+`src/shared/i18n.ts`. The same module bundles the English and Chinese
+message tables so a Settings dropdown can override the locale at
+runtime, independent of the browser UI language.
+
+To add a string:
+
+1. Add a new key to `_locales/en/messages.json` with a stable
+   description and (when needed) `$1`/`$2` placeholders.
+2. Mirror the key in `_locales/zh_CN/messages.json` with the same
+   placeholders. The parity test in `tests/i18n.test.mjs` will fail if
+   you forget.
+3. Append the key to the `LocaleKey` union in `src/shared/i18n.ts`.
+4. Replace the literal in code with `t('keyName')` (or
+   `t('keyName', [arg1, arg2])` for substitutions). For HTML, use
+   `data-i18n="keyName"` for text content or
+   `data-i18n-attr="aria-label:keyName1;title:keyName2"` for
+   attributes; `applyI18n()` walks the DOM at boot.
+
+To add a new locale, drop a new `_locales/<locale>/messages.json` next
+to the existing ones (Chrome's locale codes use underscores, e.g.
+`zh_TW`, `ja`, `de`). Tests and the `check-no-cjk` guard cover the
+existing locales only; extend them if you start using glyphs from
+another writing system that needs guarding.
+
+`scripts/check-no-cjk.mjs` runs as part of `npm run check` and fails
+when `src/` contains hard-coded CJK characters outside an allow-list
+(currently only `src/shared/prompt.ts`, which holds LLM-prompt
+scaffolding governed by `summaryLanguage`).
 
 ## Anchor Smoke Test
 
@@ -343,9 +385,10 @@ lets each batch decide how strict it should be.
   release — see [Credential Boundary](#credential-boundary-and-release-decision)).
 - More provider profiles (Anthropic, native OpenAI, local models) once the
   credential boundary is replaced.
-- Multi-language UI strings (currently mixed Chinese / English in the
-  side panel — keys exist, full i18n pass pending).
 - Per-card "open in note" export to Obsidian / Markdown.
+- Additional UI locales (Japanese / Korean / German) — the
+  `chrome.i18n` plumbing is in place; new locales just need a
+  `_locales/<lang>/messages.json` bundle.
 
 ## Contributing
 
