@@ -14,5 +14,113 @@
   "commandAnalyzePage": {
     "message": "Open Parallel Reader and analyze the current page",
     "description": "Description for the Alt+Shift+R keyboard shortcut"
-  }
+  },
+
+  "statusAnalyzing": { "message": "Analyzing…" },
+  "statusReanalyzing": { "message": "Reanalyzing…" },
+  "statusReading": { "message": "Reading…" },
+  "statusReadingThisPage": { "message": "Reading this page…" },
+  "statusOrganizing": { "message": "Tidying the page…" },
+  "statusReorganizing": { "message": "Re-tidying the page…" },
+  "statusPageLoading": { "message": "Page is loading…" },
+  "statusPageChangedCancel": { "message": "Page changed, analysis cancelled." },
+  "statusPageSwitched": { "message": "Page switched. Reselect a card on the current page." },
+  "statusPageContentChanged": { "message": "Page content changed." },
+  "statusReadingTitled": {
+    "message": "Reading: $1",
+    "description": "$1 = page title"
+  },
+  "statusPageContentChangedTitled": {
+    "message": "Page content changed: $1",
+    "description": "$1 = page title"
+  },
+  "statusWaiting": { "message": "Waiting to analyze" },
+  "statusWaitingTitled": {
+    "message": "Waiting to analyze: $1",
+    "description": "$1 = page title"
+  },
+  "statusFoundLocating": {
+    "message": "Found $1 highlights, locating…",
+    "description": "$1 = card count"
+  },
+  "statusRestoredSummary": {
+    "message": "Restored cards · $1 cards · $2 jumpable highlights · $3",
+    "description": "$1 = card count, $2 = DOM-hit count, $3 = relative analyzed-at time"
+  },
+  "statusCompleteSummary": {
+    "message": "Done · $1 cards · $2 jumpable highlights",
+    "description": "$1 = card count, $2 = DOM-hit count"
+  },
+  "statusCacheClearedCurrent": { "message": "Cleared cards for this page." },
+  "statusCacheClearedAll": {
+    "message": "Cleared all cache ($1 entries).",
+    "description": "$1 = number of removed entries"
+  },
+
+  "cardHighlighted": {
+    "message": "Highlighted #$1",
+    "description": "$1 = 1-based card index"
+  },
+  "cardLocateFailed": {
+    "message": "Locate failed #$1",
+    "description": "$1 = 1-based card index"
+  },
+  "cardNotFoundInPage": {
+    "message": "Card #$1 not found on the current page.",
+    "description": "$1 = 1-based card index"
+  },
+  "cardLocateError": {
+    "message": "Locate card #$1 failed: $2",
+    "description": "$1 = 1-based card index, $2 = error reason"
+  },
+
+  "errorPrefix": {
+    "message": "Error: $1",
+    "description": "$1 = error message"
+  },
+  "errorMissingProviderSettings": {
+    "message": "Save API Key, Base URL, and Model before analyzing this page."
+  },
+  "errorNoActiveTab": { "message": "No active tab found." },
+  "errorCannotOpenPage": {
+    "message": "Cannot open page: $1",
+    "description": "$1 = error message"
+  },
+  "pageNotReadable": {
+    "message": "This page is not currently readable. $1$2",
+    "description": "$1 = hint sentence, $2 = optional detail in parentheses"
+  },
+  "hintRefreshOrSwitch": {
+    "message": "Refresh the page or switch to a regular web page and try again."
+  },
+
+  "btnAnalyze": { "message": "Analyze this page" },
+  "btnReanalyze": { "message": "Re-analyze this page" },
+  "btnReanalyzeTitle": {
+    "message": "Re-extract this page and replace the saved results."
+  },
+  "btnClearAll": { "message": "Clear all" },
+  "btnClearAllConfirm": { "message": "Confirm clear" },
+
+  "historyDeleted": {
+    "message": "Deleted $1",
+    "description": "$1 = page title or URL"
+  },
+  "historyExportedSingle": {
+    "message": "Exported $1",
+    "description": "$1 = filename"
+  },
+  "historyExportedAll": {
+    "message": "Exported $1 history entries",
+    "description": "$1 = entry count"
+  },
+  "historyEmptyExport": { "message": "No history to export." },
+  "historyCleared": { "message": "History cleared." },
+
+  "metaCharsCount": {
+    "message": "$1 chars",
+    "description": "$1 = character count"
+  },
+  "metaUsedReadability": { "message": "Article" },
+  "metaUsedRaw": { "message": "Raw" }
 }

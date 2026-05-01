@@ -4,6 +4,7 @@ import {
   selectExtractedTextVersion,
 } from './shared/extraction-quality';
 import { computeContentFingerprint } from './shared/fingerprint';
+import { t } from './shared/i18n';
 import { contentScriptInjectionHint } from './shared/page-support';
 import {
   type AnalyzeResponse,
@@ -94,7 +95,7 @@ async function injectContentScript(tabId: number, pageUrl = ''): Promise<void> {
     const message = errorMessage(error);
     const hint = pageUrl ? contentScriptInjectionHint(pageUrl) : '';
     throw new Error(
-      `当前页面暂时无法阅读。${hint || '请刷新页面，或切换到普通网页后再试。'}${message ? ` (${message})` : ''}`,
+      t('pageNotReadable', [hint || t('hintRefreshOrSwitch'), message ? ` (${message})` : '']),
     );
   }
 }
@@ -209,13 +210,13 @@ async function handleHistoryOpen(entry: Readonly<HistoryEntry>): Promise<void> {
     }
     closeHistoryView();
   } catch (error) {
-    setStatus(`无法打开页面: ${errorMessage(error)}`);
+    setStatus(t('errorCannotOpenPage', [errorMessage(error)]));
   }
 }
 
 async function handleHistoryDelete(entry: Readonly<HistoryEntry>): Promise<void> {
   await deleteHistoryEntry(chrome.storage.local, entry.storageKey);
-  setStatus(`已删除 ${entry.title || entry.url}`);
+  setStatus(t('historyDeleted', [entry.title || entry.url]));
   await refreshHistoryList();
   if (currentPage && currentPage.url === entry.url) {
     setCurrentHasSavedResults(false);
@@ -225,23 +226,23 @@ async function handleHistoryDelete(entry: Readonly<HistoryEntry>): Promise<void>
 function handleHistoryExport(entry: Readonly<HistoryEntry>): void {
   const filename = `${sanitizeFilename(entry.title || entry.url)}.md`;
   triggerDownload(filename, entryToMarkdown(entry), 'text/markdown;charset=utf-8');
-  setStatus(`已导出 ${filename}`);
+  setStatus(t('historyExportedSingle', [filename]));
 }
 
 async function handleExportAll(): Promise<void> {
   const entries = await listHistoryEntries(chrome.storage.local);
   if (entries.length === 0) {
-    setStatus('暂无历史可导出');
+    setStatus(t('historyEmptyExport'));
     return;
   }
   const filename = `parallel-reader-history-${new Date().toISOString().slice(0, 10)}.json`;
   triggerDownload(filename, entriesToJson(entries), 'application/json;charset=utf-8');
-  setStatus(`已导出 ${entries.length} 条历史`);
+  setStatus(t('historyExportedAll', [entries.length.toString()]));
 }
 
 async function handleClearAll(): Promise<void> {
   await clearAllHistory(chrome.storage.local);
-  setStatus('历史已清空');
+  setStatus(t('historyCleared'));
   await refreshHistoryList();
   setCurrentHasSavedResults(false);
 }
@@ -261,16 +262,16 @@ function bindHistoryView(): void {
   clearBtn.addEventListener('click', () => {
     if (clearBtn.dataset.state === 'confirm') {
       clearBtn.dataset.state = 'idle';
-      clearBtn.textContent = '清空全部';
+      clearBtn.textContent = t('btnClearAll');
       void handleClearAll();
       return;
     }
     clearBtn.dataset.state = 'confirm';
-    clearBtn.textContent = '确认清空';
+    clearBtn.textContent = t('btnClearAllConfirm');
     setTimeout(() => {
       if (clearBtn.dataset.state === 'confirm') {
         clearBtn.dataset.state = 'idle';
-        clearBtn.textContent = '清空全部';
+        clearBtn.textContent = t('btnClearAll');
       }
     }, 3000);
   });
@@ -284,7 +285,7 @@ async function ensureProviderReady(): Promise<boolean> {
   const settings = await loadSettings();
   if (providerReady(settings)) return true;
   showSettings();
-  setStatus('请先保存 API Key、Base URL 和 Model 后再分析当前页');
+  setStatus(t('errorMissingProviderSettings'));
   return false;
 }
 
@@ -310,7 +311,7 @@ async function activePage(): Promise<PageIdentity> {
     return pageIdentityFromTab(tab);
   }
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (!tab) throw new Error('找不到活动标签页');
+  if (!tab) throw new Error(t('errorNoActiveTab'));
   return pageIdentityFromTab(tab);
 }
 
@@ -362,14 +363,14 @@ function updateAnalyzeButton(): void {
   hero.disabled = analyzeBusy;
   button.textContent = analyzeBusy
     ? currentHasSavedResults
-      ? '重新分析中...'
-      : '分析中...'
+      ? t('statusReanalyzing')
+      : t('statusAnalyzing')
     : currentHasSavedResults
-      ? '重新分析当前页'
-      : '分析当前页';
+      ? t('btnReanalyze')
+      : t('btnAnalyze');
   button.title =
-    currentHasSavedResults && !analyzeBusy ? '重新抽取当前页并替换已保存结果' : '';
-  if (heroLabel) heroLabel.textContent = analyzeBusy ? '分析中...' : '分析当前页';
+    currentHasSavedResults && !analyzeBusy ? t('btnReanalyzeTitle') : '';
+  if (heroLabel) heroLabel.textContent = analyzeBusy ? t('statusAnalyzing') : t('btnAnalyze');
   const showHero = !currentHasSavedResults;
   hero.hidden = !showHero;
   button.hidden = showHero;
@@ -401,13 +402,13 @@ async function highlightCardAnchor(
 ): Promise<void> {
   closeCardMenu();
   if (!canHighlight) {
-    setStatus(`当前页面中没有定位到 #${index + 1}`);
+    setStatus(t('cardNotFoundInPage', [(index + 1).toString()]));
     return;
   }
   const page = await activePage();
   if (currentPage?.key !== page.key) {
     await refreshCurrentPage();
-    setStatus('页面已切换，请在当前页重新选择卡片');
+    setStatus(t('statusPageSwitched'));
     return;
   }
   const r = (await sendToTab(page.tabId, { type: 'highlight', anchor }, page.url)) as {
@@ -415,9 +416,9 @@ async function highlightCardAnchor(
   };
   if (r?.ok) {
     setActiveCard(index);
-    setStatus(`已高亮 #${index + 1}`);
+    setStatus(t('cardHighlighted', [(index + 1).toString()]));
   } else {
-    setStatus(`定位失败 #${index + 1}`);
+    setStatus(t('cardLocateFailed', [(index + 1).toString()]));
   }
 }
 
@@ -445,10 +446,10 @@ function renderMeta(meta: Readonly<PageMeta>, used: ExtractedTextVersion): void 
   $('meta').hidden = false;
   $('meta-title').textContent = meta.title;
   $('meta-url').textContent = meta.url;
-  $('meta-raw-len').textContent = `${meta.rawTextLength} 字`;
-  $('meta-read-len').textContent = `${meta.readabilityTextLength} 字`;
-  $('meta-used').textContent = used === 'readability' ? '正文' : '原文';
-  $('meta-selected-len').textContent = `${quality.selectedTextLength} 字`;
+  $('meta-raw-len').textContent = t('metaCharsCount', [meta.rawTextLength.toString()]);
+  $('meta-read-len').textContent = t('metaCharsCount', [meta.readabilityTextLength.toString()]);
+  $('meta-used').textContent = used === 'readability' ? t('metaUsedReadability') : t('metaUsedRaw');
+  $('meta-selected-len').textContent = t('metaCharsCount', [quality.selectedTextLength.toString()]);
   if (quality.level === 'warn') {
     qualityEl.hidden = false;
     qualityEl.className = `meta-quality ${quality.level}`;
@@ -488,13 +489,22 @@ function renderPageState(state: PageState): void {
   setCurrentHasSavedResults(true);
   const analyzedAt = new Date(state.analyzedAt).toLocaleTimeString();
   setStatus(
-    `已恢复当前页结果 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处亮点可跳转 · ${analyzedAt}`,
+    t('statusRestoredSummary', [
+      state.results.length.toString(),
+      countDomHits(state.results).toString(),
+      analyzedAt,
+    ]),
   );
 }
 
 function renderCompletedPageState(state: PageState): void {
   renderPageState(state);
-  setStatus(`完成 · ${state.results.length} 张卡片 · ${countDomHits(state.results)} 处亮点可跳转`);
+  setStatus(
+    t('statusCompleteSummary', [
+      state.results.length.toString(),
+      countDomHits(state.results).toString(),
+    ]),
+  );
 }
 
 function fingerprintSourceText(extracted: Readonly<ExtractResponse>): string {
@@ -533,7 +543,11 @@ async function refreshCurrentPage(): Promise<void> {
       if (live && live !== cached.fingerprint) {
         clearRenderedPage();
         showStaleCacheBanner();
-        setStatus(page.title ? `当前页内容已变化：${page.title}` : '当前页内容已变化');
+        setStatus(
+          page.title
+            ? t('statusPageContentChangedTitled', [page.title])
+            : t('statusPageContentChanged'),
+        );
         return;
       }
       renderPageState(cached);
@@ -541,16 +555,16 @@ async function refreshCurrentPage(): Promise<void> {
     }
     clearRenderedPage();
     if (runningPageKeys.has(page.key)) {
-      setStatus(page.title ? `正在阅读：${page.title}` : '正在阅读...');
+      setStatus(page.title ? t('statusReadingTitled', [page.title]) : t('statusReading'));
       return;
     }
-    setStatus(page.title ? `等待分析：${page.title}` : '等待分析');
+    setStatus(page.title ? t('statusWaitingTitled', [page.title]) : t('statusWaiting'));
   } catch (error: unknown) {
     if (version !== refreshVersion) return;
     currentPage = null;
     clearRenderedPage();
     const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(`错误: ${msg}`);
+    setStatus(t('errorPrefix', [msg]));
   }
 }
 
@@ -593,7 +607,9 @@ async function locateAll(
   const results: CardResult[] = [];
   for (const [index, result] of settled.entries()) {
     if (result.status === 'rejected') {
-      throw new Error(`定位第 ${index + 1} 张卡片失败: ${errorMessage(result.reason)}`);
+      throw new Error(
+        t('cardLocateError', [(index + 1).toString(), errorMessage(result.reason)]),
+      );
     }
     results.push(result.value);
   }
@@ -606,7 +622,7 @@ async function resolveAnalysisPage(
   if (!forced) return await activePage();
   const result = await pageFromForcedRequest(forced);
   if ('mismatch' in result) {
-    setStatus('页面已变更，已取消分析');
+    setStatus(t('statusPageChangedCancel'));
     return null;
   }
   return result;
@@ -648,14 +664,14 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
 
     if (canRenderAnalysis(version, page)) {
       hideStaleCacheBanner();
-      setStatus(replacingExistingResults ? '正在重新整理页面...' : '正在整理页面...');
+      setStatus(replacingExistingResults ? t('statusReorganizing') : t('statusOrganizing'));
     }
     const extracted = (await sendToTab(page.tabId, { type: 'extract' }, page.url)) as ExtractResponse;
     const meta = pageMetaFromExtracted(extracted);
     const fingerprint = await computeContentFingerprint(fingerprintSourceText(extracted));
     if (canRenderAnalysis(version, page)) {
       renderMeta(meta, selectExtractedTextVersion(meta.readabilityTextLength));
-      setStatus('正在阅读这页...');
+      setStatus(t('statusReadingThisPage'));
     }
 
     const resp = (await chrome.runtime.sendMessage({
@@ -665,13 +681,13 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     })) as AnalyzeResponse;
 
     if (!resp.ok) {
-      if (canRenderAnalysis(version, page)) setStatus(`错误: ${resp.error}`);
+      if (canRenderAnalysis(version, page)) setStatus(t('errorPrefix', [resp.error]));
       return;
     }
 
     if (canRenderAnalysis(version, page)) {
       renderMeta(meta, resp.usedText);
-      setStatus(`找到 ${resp.cards.length} 处亮点，正在标注...`);
+      setStatus(t('statusFoundLocating', [resp.cards.length.toString()]));
     }
 
     const results = await locateAll(page, resp.cards);
@@ -689,7 +705,7 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
-    if (!page || canRenderAnalysis(version, page)) setStatus(`错误: ${msg}`);
+    if (!page || canRenderAnalysis(version, page)) setStatus(t('errorPrefix', [msg]));
   } finally {
     if (page) setPageBusy(page.key, false);
   }
@@ -736,14 +752,14 @@ async function init(): Promise<void> {
       await clearPageState(pageStateStorage, currentPage.key);
       hideStaleCacheBanner();
       clearRenderedPage();
-      setStatus('已清除当前页缓存');
+      setStatus(t('statusCacheClearedCurrent'));
       return true;
     },
     clearAllPages: async () => {
       const removed = await clearAllPageStates(pageStateStorage);
       hideStaleCacheBanner();
       clearRenderedPage();
-      setStatus(`已清除全部缓存（${removed} 项）`);
+      setStatus(t('statusCacheClearedAll', [removed.toString()]));
       return removed;
     },
   });
@@ -809,7 +825,7 @@ async function init(): Promise<void> {
     }
     if (changeInfo.status === 'loading') {
       clearRenderedPage();
-      setStatus('页面正在加载...');
+      setStatus(t('statusPageLoading'));
     }
   });
   chrome.windows.onFocusChanged.addListener(() => {

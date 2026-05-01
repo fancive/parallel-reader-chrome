@@ -14,5 +14,53 @@
   "commandAnalyzePage": {
     "message": "打开 Parallel Reader 并分析当前页面",
     "description": "Description for the Alt+Shift+R keyboard shortcut"
-  }
+  },
+
+  "statusAnalyzing": { "message": "分析中..." },
+  "statusReanalyzing": { "message": "重新分析中..." },
+  "statusReading": { "message": "正在阅读..." },
+  "statusReadingThisPage": { "message": "正在阅读这页..." },
+  "statusOrganizing": { "message": "正在整理页面..." },
+  "statusReorganizing": { "message": "正在重新整理页面..." },
+  "statusPageLoading": { "message": "页面正在加载..." },
+  "statusPageChangedCancel": { "message": "页面已变更，已取消分析" },
+  "statusPageSwitched": { "message": "页面已切换，请在当前页重新选择卡片" },
+  "statusPageContentChanged": { "message": "当前页内容已变化" },
+  "statusReadingTitled": { "message": "正在阅读：$1" },
+  "statusPageContentChangedTitled": { "message": "当前页内容已变化：$1" },
+  "statusWaiting": { "message": "等待分析" },
+  "statusWaitingTitled": { "message": "等待分析：$1" },
+  "statusFoundLocating": { "message": "找到 $1 处亮点，正在标注..." },
+  "statusRestoredSummary": { "message": "已恢复当前页结果 · $1 张卡片 · $2 处亮点可跳转 · $3" },
+  "statusCompleteSummary": { "message": "完成 · $1 张卡片 · $2 处亮点可跳转" },
+  "statusCacheClearedCurrent": { "message": "已清除当前页缓存" },
+  "statusCacheClearedAll": { "message": "已清除全部缓存（$1 项）" },
+
+  "cardHighlighted": { "message": "已高亮 #$1" },
+  "cardLocateFailed": { "message": "定位失败 #$1" },
+  "cardNotFoundInPage": { "message": "当前页面中没有定位到 #$1" },
+  "cardLocateError": { "message": "定位第 $1 张卡片失败: $2" },
+
+  "errorPrefix": { "message": "错误: $1" },
+  "errorMissingProviderSettings": { "message": "请先保存 API Key、Base URL 和 Model 后再分析当前页" },
+  "errorNoActiveTab": { "message": "找不到活动标签页" },
+  "errorCannotOpenPage": { "message": "无法打开页面: $1" },
+  "pageNotReadable": { "message": "当前页面暂时无法阅读。$1$2" },
+  "hintRefreshOrSwitch": { "message": "请刷新页面，或切换到普通网页后再试。" },
+
+  "btnAnalyze": { "message": "分析当前页" },
+  "btnReanalyze": { "message": "重新分析当前页" },
+  "btnReanalyzeTitle": { "message": "重新抽取当前页并替换已保存结果" },
+  "btnClearAll": { "message": "清空全部" },
+  "btnClearAllConfirm": { "message": "确认清空" },
+
+  "historyDeleted": { "message": "已删除 $1" },
+  "historyExportedSingle": { "message": "已导出 $1" },
+  "historyExportedAll": { "message": "已导出 $1 条历史" },
+  "historyEmptyExport": { "message": "暂无历史可导出" },
+  "historyCleared": { "message": "历史已清空" },
+
+  "metaCharsCount": { "message": "$1 字" },
+  "metaUsedReadability": { "message": "正文" },
+  "metaUsedRaw": { "message": "原文" }
 }
