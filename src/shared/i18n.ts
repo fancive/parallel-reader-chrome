@@ -90,7 +90,71 @@ export type LocaleKey =
   | 'cardCannotLocateAriaLabel'
   | 'cardClickToHighlightTitle'
   | 'cardRightClickActionsTitle'
-  | 'badgeLocate';
+  | 'badgeLocate'
+  | 'settingsAriaLabel'
+  | 'settingsTitle'
+  | 'shortcutHint'
+  | 'settingsLegendAppearance'
+  | 'settingsLabelTheme'
+  | 'themeOptionPaper'
+  | 'themeOptionDark'
+  | 'settingsLegendDiagnostics'
+  | 'settingsDebugLabel'
+  | 'settingsLocalModeNote'
+  | 'settingsBtnHistory'
+  | 'settingsLabelCards'
+  | 'settingsLabelSummaryLanguage'
+  | 'summaryLanguageOptionZhCn'
+  | 'summaryLanguageOptionEn'
+  | 'settingsLabelDensity'
+  | 'densityOptionConcise'
+  | 'densityOptionNormal'
+  | 'densityOptionDetailed'
+  | 'settingsLabelMaxDoc'
+  | 'settingsLabelCacheTtl'
+  | 'btnSettingsSave'
+  | 'cacheControlsTitle'
+  | 'btnCacheClearCurrent'
+  | 'btnCacheClearAllPages'
+  | 'cacheConfirmText'
+  | 'cacheConfirmAllText'
+  | 'cacheConfirmYes'
+  | 'cacheConfirmNo'
+  | 'staleCacheText'
+  | 'btnStaleCacheRerun'
+  | 'diagSummary'
+  | 'statRawLen'
+  | 'statReadLen'
+  | 'statRawMatch'
+  | 'statReadMatch'
+  | 'statDomLocate'
+  | 'historyAriaLabel'
+  | 'historyHeading'
+  | 'btnCloseHistoryAriaLabel'
+  | 'btnCloseHistoryTitle'
+  | 'btnHistoryExportAllJson'
+  | 'cardMenuAriaLabel';
+
+/**
+ * Walk the DOM and replace `data-i18n="key"` text nodes and
+ * `data-i18n-attr="attr1:key1;attr2:key2"` attributes with localized
+ * strings. Call once after DOMContentLoaded.
+ */
+export function applyI18n(root: ParentNode = document): void {
+  for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
+    const key = el.dataset.i18n as LocaleKey | undefined;
+    if (key) el.textContent = t(key);
+  }
+  for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-attr]')) {
+    const spec = el.dataset.i18nAttr;
+    if (!spec) continue;
+    for (const pair of spec.split(';')) {
+      const [attr, key] = pair.split(':').map((s) => s.trim());
+      if (!attr || !key) continue;
+      el.setAttribute(attr, t(key as LocaleKey));
+    }
+  }
+}
 
 export function t(key: LocaleKey, substitutions?: string | readonly string[]): string {
   if (typeof chrome === 'undefined' || !chrome.i18n?.getMessage) {

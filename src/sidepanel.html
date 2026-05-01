@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Parallel Reader</title>
@@ -9,41 +9,44 @@
     <section id="action" class="action-panel">
       <div class="action-copy">
         <div class="eyebrow">Now reading</div>
-        <p id="status" aria-live="polite">等待分析</p>
+        <p id="status" aria-live="polite" data-i18n="statusWaiting"></p>
       </div>
       <div class="action-controls">
-        <button id="settings-toggle" class="icon-button" type="button" aria-label="设置" title="设置">⚙</button>
-        <button id="analyze" class="primary-action" type="button">分析当前页</button>
+        <button
+          id="settings-toggle"
+          class="icon-button"
+          type="button"
+          data-i18n-attr="aria-label:settingsAriaLabel;title:settingsTitle"
+        >⚙</button>
+        <button id="analyze" class="primary-action" type="button" data-i18n="btnAnalyze"></button>
       </div>
     </section>
 
     <button id="analyze-hero" class="hero-action" type="button" hidden>
-      <span class="hero-action-label">分析当前页</span>
-      <span class="hero-action-hint">快捷键 Alt+Shift+R</span>
+      <span class="hero-action-label" data-i18n="btnAnalyze"></span>
+      <span class="hero-action-hint" data-i18n="shortcutHint"></span>
     </button>
 
     <section id="settings" class="settings-panel" hidden>
       <fieldset class="settings-group" id="settings-group-appearance">
-        <legend>外观</legend>
-        <label>界面风格
-          <select id="theme-select" aria-label="界面风格">
-            <option value="paper">纸本</option>
-            <option value="dark">深色</option>
+        <legend data-i18n="settingsLegendAppearance"></legend>
+        <label><span data-i18n="settingsLabelTheme"></span>
+          <select id="theme-select" data-i18n-attr="aria-label:settingsLabelTheme">
+            <option value="paper" data-i18n="themeOptionPaper"></option>
+            <option value="dark" data-i18n="themeOptionDark"></option>
             <option value="cloud">Claude</option>
           </select>
         </label>
       </fieldset>
       <fieldset class="settings-group" id="settings-group-diagnostics">
-        <legend>诊断</legend>
+        <legend data-i18n="settingsLegendDiagnostics"></legend>
         <label class="settings-checkbox">
           <input id="debug-mode" type="checkbox" />
-          <span>显示调试信息（抽取与定位诊断）</span>
+          <span data-i18n="settingsDebugLabel"></span>
         </label>
       </fieldset>
-      <p class="settings-note">
-        本地模式：API Key 只保存在当前 Chrome。公开发布前需要改为后端或临时凭证方案。
-      </p>
-      <button id="history-open" class="settings-secondary" type="button">📚 查看历史</button>
+      <p class="settings-note" data-i18n="settingsLocalModeNote"></p>
+      <button id="history-open" class="settings-secondary" type="button" data-i18n="settingsBtnHistory"></button>
       <label>API Key
         <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
       </label>
@@ -53,50 +56,50 @@
       <label>Model
         <input id="model" type="text" />
       </label>
-      <label>Cards 数量
+      <label><span data-i18n="settingsLabelCards"></span>
         <span class="row">
           <input id="min-cards" type="number" min="1" />
           <span>—</span>
           <input id="max-cards" type="number" min="1" />
         </span>
       </label>
-      <label>摘要语言
+      <label><span data-i18n="settingsLabelSummaryLanguage"></span>
         <select id="summary-language">
-          <option value="zh-CN">中文</option>
-          <option value="en">English</option>
+          <option value="zh-CN" data-i18n="summaryLanguageOptionZhCn"></option>
+          <option value="en" data-i18n="summaryLanguageOptionEn"></option>
         </select>
       </label>
-      <label>信息密度
+      <label><span data-i18n="settingsLabelDensity"></span>
         <select id="card-density">
-          <option value="concise">精简</option>
-          <option value="normal">标准</option>
-          <option value="detailed">详细</option>
+          <option value="concise" data-i18n="densityOptionConcise"></option>
+          <option value="normal" data-i18n="densityOptionNormal"></option>
+          <option value="detailed" data-i18n="densityOptionDetailed"></option>
         </select>
       </label>
-      <label>截断字数
+      <label><span data-i18n="settingsLabelMaxDoc"></span>
         <input id="max-doc" type="number" min="500" step="500" />
       </label>
-      <label>缓存保留天数
+      <label><span data-i18n="settingsLabelCacheTtl"></span>
         <input id="cache-ttl-days" type="number" min="1" max="90" step="1" />
       </label>
       <p id="settings-error" class="settings-error" role="alert" hidden></p>
-      <button id="settings-save" type="button">保存</button>
+      <button id="settings-save" type="button" data-i18n="btnSettingsSave"></button>
       <div class="cache-controls">
-        <div class="cache-controls-title">缓存管理</div>
+        <div class="cache-controls-title" data-i18n="cacheControlsTitle"></div>
         <div class="cache-controls-row">
-          <button id="cache-clear-current" type="button">清除当前页缓存</button>
+          <button id="cache-clear-current" type="button" data-i18n="btnCacheClearCurrent"></button>
           <span id="cache-clear-current-confirm" class="cache-confirm" hidden>
-            <span>确定清除？</span>
-            <button id="cache-clear-current-yes" type="button">确认</button>
-            <button id="cache-clear-current-no" type="button">取消</button>
+            <span data-i18n="cacheConfirmText"></span>
+            <button id="cache-clear-current-yes" type="button" data-i18n="cacheConfirmYes"></button>
+            <button id="cache-clear-current-no" type="button" data-i18n="cacheConfirmNo"></button>
           </span>
         </div>
         <div class="cache-controls-row">
-          <button id="cache-clear-all" type="button">清除全部缓存页面</button>
+          <button id="cache-clear-all" type="button" data-i18n="btnCacheClearAllPages"></button>
           <span id="cache-clear-all-confirm" class="cache-confirm" hidden>
-            <span>确定清除全部？</span>
-            <button id="cache-clear-all-yes" type="button">确认</button>
-            <button id="cache-clear-all-no" type="button">取消</button>
+            <span data-i18n="cacheConfirmAllText"></span>
+            <button id="cache-clear-all-yes" type="button" data-i18n="cacheConfirmYes"></button>
+            <button id="cache-clear-all-no" type="button" data-i18n="cacheConfirmNo"></button>
           </span>
         </div>
         <p id="cache-status" class="cache-status" aria-live="polite"></p>
@@ -104,8 +107,8 @@
     </section>
 
     <section id="stale-cache-banner" class="stale-cache-banner" role="status" hidden>
-      <span class="stale-cache-text">页面内容自上次分析后已变化。是否重新分析？</span>
-      <button id="stale-cache-rerun" type="button">重新分析</button>
+      <span class="stale-cache-text" data-i18n="staleCacheText"></span>
+      <button id="stale-cache-rerun" type="button" data-i18n="btnStaleCacheRerun"></button>
     </section>
 
     <section id="meta" class="page-state" hidden>
@@ -122,34 +125,39 @@
     </section>
 
     <details id="stats" class="diagnostics debug-only" hidden>
-      <summary>阅读诊断</summary>
+      <summary data-i18n="diagSummary"></summary>
       <div class="diagnostic-grid">
-        <div class="stat"><span class="stat-label">原文长度</span><span id="meta-raw-len"></span></div>
-        <div class="stat"><span class="stat-label">正文长度</span><span id="meta-read-len"></span></div>
-        <div class="stat"><span class="stat-label">原文匹配</span><span id="stat-raw"></span></div>
-        <div class="stat"><span class="stat-label">正文匹配</span><span id="stat-read"></span></div>
-        <div class="stat"><span class="stat-label">页面定位</span><span id="stat-dom"></span></div>
+        <div class="stat"><span class="stat-label" data-i18n="statRawLen"></span><span id="meta-raw-len"></span></div>
+        <div class="stat"><span class="stat-label" data-i18n="statReadLen"></span><span id="meta-read-len"></span></div>
+        <div class="stat"><span class="stat-label" data-i18n="statRawMatch"></span><span id="stat-raw"></span></div>
+        <div class="stat"><span class="stat-label" data-i18n="statReadMatch"></span><span id="stat-read"></span></div>
+        <div class="stat"><span class="stat-label" data-i18n="statDomLocate"></span><span id="stat-dom"></span></div>
       </div>
     </details>
 
-    <section id="history" class="history-panel" hidden aria-label="历史记录">
+    <section id="history" class="history-panel" hidden data-i18n-attr="aria-label:historyAriaLabel">
       <header class="history-header">
         <div class="history-title-row">
           <span class="eyebrow">Library</span>
-          <span class="history-heading">历史记录</span>
+          <span class="history-heading" data-i18n="historyHeading"></span>
         </div>
-        <button id="history-close" class="icon-button" type="button" aria-label="关闭历史" title="返回">×</button>
+        <button
+          id="history-close"
+          class="icon-button"
+          type="button"
+          data-i18n-attr="aria-label:btnCloseHistoryAriaLabel;title:btnCloseHistoryTitle"
+        >×</button>
       </header>
       <div class="history-bulk-actions">
-        <button id="history-export-all" type="button">导出 JSON</button>
-        <button id="history-clear-all" type="button" class="history-action-danger">清空全部</button>
+        <button id="history-export-all" type="button" data-i18n="btnHistoryExportAllJson"></button>
+        <button id="history-clear-all" type="button" class="history-action-danger" data-i18n="btnClearAll"></button>
       </div>
       <div id="history-list" class="history-list"></div>
       <p id="history-empty" class="history-empty" hidden>No analyzed pages yet. Open a page and click Analyze.</p>
     </section>
 
     <section id="cards"></section>
-    <div id="card-menu" class="card-menu" role="menu" aria-label="卡片操作" hidden></div>
+    <div id="card-menu" class="card-menu" role="menu" data-i18n-attr="aria-label:cardMenuAriaLabel" hidden></div>
 
     <script type="module" src="sidepanel.js"></script>
   </body>
