@@ -27,7 +27,7 @@ docker run --rm -t \
   bash -c '
     set -euo pipefail
     apt-get update >/dev/null
-    apt-get install -y --no-install-recommends python3 python3-yaml >/dev/null
+    apt-get install -y --no-install-recommends python3 python-is-python3 python3-yaml >/dev/null
     npm ci
     xvfb-run -a npm run e2e
   '
