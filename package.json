@@ -5,7 +5,8 @@
   "description": "Anchor-based summary cards for any web page",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "check": "npm run lint && npm test && npm run typecheck && npm run build && npm audit --audit-level=high",
+    "check": "npm run lint && npm run check:no-cjk && npm test && npm run typecheck && npm run build && npm audit --audit-level=high",
+    "check:no-cjk": "node scripts/check-no-cjk.mjs",
     "dev": "node esbuild.config.mjs --watch",
     "e2e": "bash .e2e/gate.sh",
     "e2e:linux": "bash scripts/e2e-linux.sh",
