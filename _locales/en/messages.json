@@ -122,5 +122,17 @@
     "description": "$1 = character count"
   },
   "metaUsedReadability": { "message": "Article" },
-  "metaUsedRaw": { "message": "Raw" }
+  "metaUsedRaw": { "message": "Raw" },
+
+  "settingsInvalid": {
+    "message": "Invalid setting: $1",
+    "description": "$1 = first validation error message or default check-input prompt"
+  },
+  "settingsCheckInput": { "message": "Please check the input." },
+  "settingsSaved": { "message": "Settings saved." },
+  "cacheStatusNoCache": { "message": "No cached data for this page." },
+  "cacheStatusClearedCount": {
+    "message": "Cleared $1 cached entries.",
+    "description": "$1 = number of cleared entries"
+  }
 }

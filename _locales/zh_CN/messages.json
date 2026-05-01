@@ -62,5 +62,11 @@
 
   "metaCharsCount": { "message": "$1 字" },
   "metaUsedReadability": { "message": "正文" },
-  "metaUsedRaw": { "message": "原文" }
+  "metaUsedRaw": { "message": "原文" },
+
+  "settingsInvalid": { "message": "设置无效: $1" },
+  "settingsCheckInput": { "message": "请检查输入" },
+  "settingsSaved": { "message": "设置已保存" },
+  "cacheStatusNoCache": { "message": "当前页未保存缓存" },
+  "cacheStatusClearedCount": { "message": "已清除 $1 项缓存" }
 }

@@ -47,7 +47,12 @@ export type LocaleKey =
   | 'historyCleared'
   | 'metaCharsCount'
   | 'metaUsedReadability'
-  | 'metaUsedRaw';
+  | 'metaUsedRaw'
+  | 'settingsInvalid'
+  | 'settingsCheckInput'
+  | 'settingsSaved'
+  | 'cacheStatusNoCache'
+  | 'cacheStatusClearedCount';
 
 export function t(key: LocaleKey, substitutions?: string | readonly string[]): string {
   if (typeof chrome === 'undefined' || !chrome.i18n?.getMessage) {

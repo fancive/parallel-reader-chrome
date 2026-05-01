@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n';
 import { logWarn } from '../shared/logger';
 import { type ProviderSettings, ProviderSettingsSchema, SETTINGS_KEY } from '../shared/types';
 import { $ } from './dom';
@@ -72,14 +73,14 @@ export function bindSettingsForm(
     });
     if (!parsed.success) {
       showSettingsError(
-        `设置无效: ${parsed.error.issues[0]?.message ?? '请检查输入'}`,
+        t('settingsInvalid', [parsed.error.issues[0]?.message ?? t('settingsCheckInput')]),
         deps,
       );
       return;
     }
     clearSettingsError();
     await deps.saveSettings(parsed.data);
-    deps.setStatus('设置已保存');
+    deps.setStatus(t('settingsSaved'));
   });
 
   bindCacheControls(deps);
@@ -116,7 +117,7 @@ function bindCacheControls(deps: SettingsFormDeps): void {
       hideInlineConfirm('cache-clear-current-confirm');
       if (!deps.clearCurrentPage) return;
       const cleared = await deps.clearCurrentPage();
-      setCacheStatus(cleared ? '已清除当前页缓存' : '当前页未保存缓存');
+      setCacheStatus(cleared ? t('statusCacheClearedCurrent') : t('cacheStatusNoCache'));
     });
   }
 
@@ -135,7 +136,7 @@ function bindCacheControls(deps: SettingsFormDeps): void {
       hideInlineConfirm('cache-clear-all-confirm');
       if (!deps.clearAllPages) return;
       const removed = await deps.clearAllPages();
-      setCacheStatus(`已清除 ${removed} 项缓存`);
+      setCacheStatus(t('cacheStatusClearedCount', [removed.toString()]));
     });
   }
 }
