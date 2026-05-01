@@ -275,5 +275,18 @@
   "btnCloseHistoryAriaLabel": { "message": "Close history" },
   "btnCloseHistoryTitle": { "message": "Back" },
   "btnHistoryExportAllJson": { "message": "Export JSON" },
-  "cardMenuAriaLabel": { "message": "Card actions" }
+  "cardMenuAriaLabel": { "message": "Card actions" },
+
+  "eyebrowNowReading": { "message": "Now reading" },
+  "eyebrowLibrary": { "message": "Library" },
+  "metaLabelPage": { "message": "Page" },
+  "metaLabelText": { "message": "Text" },
+  "metaLabelSource": { "message": "Source" },
+  "historyEmptyMessage": {
+    "message": "No analyzed pages yet. Open a page and click Analyze."
+  },
+  "clipboardQuoteLine": {
+    "message": "Quote: $1",
+    "description": "$1 = the verbatim card anchor text"
+  }
 }

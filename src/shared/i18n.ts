@@ -19,8 +19,20 @@ const BUNDLES: Record<'en' | 'zh_CN', MessageBundle> = {
 export type LocaleOverride = 'auto' | 'en' | 'zh_CN';
 let localeOverride: LocaleOverride = 'auto';
 
+function activeBcp47(): string {
+  if (localeOverride === 'zh_CN') return 'zh-CN';
+  if (localeOverride === 'en') return 'en';
+  if (typeof chrome !== 'undefined' && chrome.i18n?.getUILanguage) {
+    return chrome.i18n.getUILanguage();
+  }
+  return 'en';
+}
+
 export function setLocaleOverride(value: LocaleOverride): void {
   localeOverride = value;
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.lang = activeBcp47();
+  }
 }
 
 export function getLocaleOverride(): LocaleOverride {
@@ -163,7 +175,14 @@ export type LocaleKey =
   | 'btnCloseHistoryAriaLabel'
   | 'btnCloseHistoryTitle'
   | 'btnHistoryExportAllJson'
-  | 'cardMenuAriaLabel';
+  | 'cardMenuAriaLabel'
+  | 'eyebrowNowReading'
+  | 'eyebrowLibrary'
+  | 'metaLabelPage'
+  | 'metaLabelText'
+  | 'metaLabelSource'
+  | 'historyEmptyMessage'
+  | 'clipboardQuoteLine';
 
 /**
  * Walk the DOM and replace `data-i18n="key"` text nodes and

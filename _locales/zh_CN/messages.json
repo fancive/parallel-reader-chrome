@@ -162,5 +162,13 @@
   "btnCloseHistoryAriaLabel": { "message": "关闭历史" },
   "btnCloseHistoryTitle": { "message": "返回" },
   "btnHistoryExportAllJson": { "message": "导出 JSON" },
-  "cardMenuAriaLabel": { "message": "卡片操作" }
+  "cardMenuAriaLabel": { "message": "卡片操作" },
+
+  "eyebrowNowReading": { "message": "正在阅读" },
+  "eyebrowLibrary": { "message": "历史库" },
+  "metaLabelPage": { "message": "页面" },
+  "metaLabelText": { "message": "字数" },
+  "metaLabelSource": { "message": "来源" },
+  "historyEmptyMessage": { "message": "还没有分析过的页面。打开任意页面后点击「分析当前页」。" },
+  "clipboardQuoteLine": { "message": "引用: $1" }
 }

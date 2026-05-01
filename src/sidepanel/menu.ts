@@ -15,7 +15,7 @@ export function cardSummaryText(card: Readonly<Card>, index: number): string {
   return [
     `${index + 1}. ${card.title}`,
     '',
-    `Quote: ${card.anchor}`,
+    t('clipboardQuoteLine', [card.anchor]),
     '',
     card.gist,
     ...bullets,

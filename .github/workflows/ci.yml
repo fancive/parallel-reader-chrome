@@ -40,6 +40,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check no hard-coded CJK
+        run: npm run check:no-cjk
+
       - name: Unit and Contract Tests
         run: npm test
 

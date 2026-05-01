@@ -8,7 +8,7 @@
   <body>
     <section id="action" class="action-panel">
       <div class="action-copy">
-        <div class="eyebrow">Now reading</div>
+        <div class="eyebrow" data-i18n="eyebrowNowReading"></div>
         <p id="status" aria-live="polite" data-i18n="statusWaiting"></p>
       </div>
       <div class="action-controls">
@@ -120,13 +120,13 @@
 
     <section id="meta" class="page-state" hidden>
       <div class="page-title-row">
-        <span class="meta-label">Page</span>
+        <span class="meta-label" data-i18n="metaLabelPage"></span>
         <span id="meta-title"></span>
       </div>
       <div class="page-url" id="meta-url"></div>
       <div class="metric-strip debug-only">
-        <div class="meta-row"><span class="meta-label">Text</span><span id="meta-selected-len"></span></div>
-        <div class="meta-row"><span class="meta-label">Source</span><span id="meta-used"></span></div>
+        <div class="meta-row"><span class="meta-label" data-i18n="metaLabelText"></span><span id="meta-selected-len"></span></div>
+        <div class="meta-row"><span class="meta-label" data-i18n="metaLabelSource"></span><span id="meta-used"></span></div>
       </div>
       <div id="meta-quality" class="meta-quality debug-only" hidden></div>
     </section>
@@ -145,7 +145,7 @@
     <section id="history" class="history-panel" hidden data-i18n-attr="aria-label:historyAriaLabel">
       <header class="history-header">
         <div class="history-title-row">
-          <span class="eyebrow">Library</span>
+          <span class="eyebrow" data-i18n="eyebrowLibrary"></span>
           <span class="history-heading" data-i18n="historyHeading"></span>
         </div>
         <button
@@ -160,7 +160,7 @@
         <button id="history-clear-all" type="button" class="history-action-danger" data-i18n="btnClearAll"></button>
       </div>
       <div id="history-list" class="history-list"></div>
-      <p id="history-empty" class="history-empty" hidden>No analyzed pages yet. Open a page and click Analyze.</p>
+      <p id="history-empty" class="history-empty" hidden data-i18n="historyEmptyMessage"></p>
     </section>
 
     <section id="cards"></section>

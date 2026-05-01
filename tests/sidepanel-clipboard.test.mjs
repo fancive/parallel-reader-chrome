@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './helpers/i18n-mock.mjs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
