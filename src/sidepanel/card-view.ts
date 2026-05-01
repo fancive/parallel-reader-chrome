@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n';
 import type { Card, LocateResponse } from '../shared/types';
 
 type CardResult = { card: Card; locate: LocateResponse };
@@ -8,12 +9,12 @@ export function cardClassName(canHighlight: boolean): string {
 
 export function cardAriaLabel(index: number, canHighlight: boolean): string {
   return canHighlight
-    ? `高亮定位第 ${index + 1} 张卡片`
-    : `第 ${index + 1} 张卡片暂时无法定位`;
+    ? t('cardHighlightAriaLabel', [(index + 1).toString()])
+    : t('cardCannotLocateAriaLabel', [(index + 1).toString()]);
 }
 
 export function cardTitleAttr(canHighlight: boolean): string {
-  return canHighlight ? '点击高亮定位，右键查看更多操作' : '右键查看更多操作';
+  return canHighlight ? t('cardClickToHighlightTitle') : t('cardRightClickActionsTitle');
 }
 
 export type CardViewDeps = {
@@ -53,9 +54,9 @@ function makeCardHead(card: Readonly<Card>, index: number, locate: LocateRespons
 
   const badges = document.createElement('div');
   badges.className = 'card-badges debug-only';
-  badges.appendChild(makeBadge('原文', locate.rawHit));
-  badges.appendChild(makeBadge('正文', locate.readabilityHit));
-  badges.appendChild(makeBadge('定位', locate.domRange));
+  badges.appendChild(makeBadge(t('metaUsedRaw'), locate.rawHit));
+  badges.appendChild(makeBadge(t('metaUsedReadability'), locate.readabilityHit));
+  badges.appendChild(makeBadge(t('badgeLocate'), locate.domRange));
   head.appendChild(badges);
 
   return head;
@@ -71,9 +72,9 @@ export function renderCard(result: CardResult, index: number, deps: CardViewDeps
   el.role = 'button';
   el.setAttribute('data-card-index', String(index));
   el.ariaLabel = canHighlight
-    ? `高亮定位第 ${index + 1} 张卡片`
-    : `第 ${index + 1} 张卡片暂时无法定位`;
-  el.title = canHighlight ? '点击高亮定位，右键查看更多操作' : '右键查看更多操作';
+    ? t('cardHighlightAriaLabel', [(index + 1).toString()])
+    : t('cardCannotLocateAriaLabel', [(index + 1).toString()]);
+  el.title = canHighlight ? t('cardClickToHighlightTitle') : t('cardRightClickActionsTitle');
 
   el.appendChild(makeCardHead(card, index, locate));
 

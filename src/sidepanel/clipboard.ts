@@ -1,3 +1,5 @@
+import { t } from '../shared/i18n';
+
 function fallbackCopyText(text: string): void {
   const textarea = document.createElement('textarea');
   textarea.value = text;
@@ -9,7 +11,7 @@ function fallbackCopyText(text: string): void {
   textarea.select();
   const ok = document.execCommand('copy');
   textarea.remove();
-  if (!ok) throw new Error('浏览器拒绝写入剪贴板');
+  if (!ok) throw new Error(t('clipboardWriteDenied'));
 }
 
 export async function copyText(
@@ -26,6 +28,6 @@ export async function copyText(
     setStatus(okStatus);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(`复制失败: ${msg}`);
+    setStatus(t('clipboardCopyFailed', [msg]));
   }
 }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './helpers/i18n-mock.mjs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -39,11 +40,11 @@ test('pageIdentityFromTab returns identity for a normal tab', () => {
 });
 
 test('pageIdentityFromTab throws on missing tab id', () => {
-  assert.throws(() => pageIdentityFromTab({ url: 'https://x' }), /找不到活动标签页/);
+  assert.throws(() => pageIdentityFromTab({ url: 'https://x' }), /No active tab/i);
 });
 
 test('pageIdentityFromTab throws on missing url', () => {
-  assert.throws(() => pageIdentityFromTab({ id: 1 }), /没有 URL/);
+  assert.throws(() => pageIdentityFromTab({ id: 1 }), /no URL/i);
 });
 
 test('pageIdentityFromTab throws on chrome:// urls', () => {
