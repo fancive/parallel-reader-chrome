@@ -1,6 +1,6 @@
 {
   "name": "parallel-reader-chrome",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Anchor-based summary cards for any web page",
   "scripts": {
