@@ -58,7 +58,7 @@ jobs:
       - name: E2E Gate
         env:
           E2E_CONTRACT_VALIDATOR_PYTHONPATH: ${{ github.workspace }}/tools/e2e
-        run: xvfb-run -a timeout 600 bash .e2e/gate.sh --json
+        run: timeout 1200 npm run e2e:linux
 
       - name: Upload E2E Artifacts on Failure
         if: failure()
