@@ -1,5 +1,31 @@
 // Typed wrapper around chrome.i18n.getMessage. The key union is hand-
 // maintained against _locales/en/messages.json (the source of truth).
+//
+// The wrapper also supports an explicit per-user override (auto / en / zh_CN)
+// so the side panel can switch language without changing Chrome's UI locale.
+// Both messages.json files are bundled at build time via static JSON imports.
+
+import enMessages from '../../_locales/en/messages.json';
+import zhMessages from '../../_locales/zh_CN/messages.json';
+
+type MessageEntry = { message: string };
+type MessageBundle = Record<string, MessageEntry>;
+
+const BUNDLES: Record<'en' | 'zh_CN', MessageBundle> = {
+  en: enMessages as MessageBundle,
+  zh_CN: zhMessages as MessageBundle,
+};
+
+export type LocaleOverride = 'auto' | 'en' | 'zh_CN';
+let localeOverride: LocaleOverride = 'auto';
+
+export function setLocaleOverride(value: LocaleOverride): void {
+  localeOverride = value;
+}
+
+export function getLocaleOverride(): LocaleOverride {
+  return localeOverride;
+}
 
 export type LocaleKey =
   | 'appName'
@@ -103,6 +129,10 @@ export type LocaleKey =
   | 'settingsLocalModeNote'
   | 'settingsBtnHistory'
   | 'settingsLabelCards'
+  | 'settingsLabelUiLanguage'
+  | 'uiLanguageOptionAuto'
+  | 'uiLanguageOptionEn'
+  | 'uiLanguageOptionZhCn'
   | 'settingsLabelSummaryLanguage'
   | 'summaryLanguageOptionZhCn'
   | 'summaryLanguageOptionEn'
@@ -156,7 +186,29 @@ export function applyI18n(root: ParentNode = document): void {
   }
 }
 
+function applySubstitutions(template: string, substitutions: string | readonly string[] | undefined): string {
+  if (substitutions === undefined) return template;
+  const arr = Array.isArray(substitutions) ? substitutions : [substitutions];
+  let out = template;
+  for (let i = 0; i < arr.length; i++) {
+    out = out.split('$' + (i + 1)).join(String(arr[i]));
+  }
+  return out;
+}
+
+function lookupBundled(key: LocaleKey, locale: 'en' | 'zh_CN'): string | undefined {
+  const entry = BUNDLES[locale][key];
+  return entry?.message;
+}
+
 export function t(key: LocaleKey, substitutions?: string | readonly string[]): string {
+  // Explicit user override: bypass chrome.i18n entirely so the side panel
+  // can render in a locale that differs from Chrome's UI language.
+  if (localeOverride !== 'auto') {
+    const template = lookupBundled(key, localeOverride);
+    if (template !== undefined) return applySubstitutions(template, substitutions);
+  }
+
   if (typeof chrome === 'undefined' || !chrome.i18n?.getMessage) {
     return key;
   }

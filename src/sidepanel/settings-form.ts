@@ -53,6 +53,10 @@ export function bindSettingsForm(
   $<HTMLSelectElement>('card-density').value = initial.cardDensity;
   $<HTMLInputElement>('max-doc').value = String(initial.maxDocChars);
   $<HTMLInputElement>('cache-ttl-days').value = String(initial.cacheTtlDays);
+  const uiLanguageSelect = document.getElementById('ui-language');
+  if (uiLanguageSelect instanceof HTMLSelectElement) {
+    uiLanguageSelect.value = initial.uiLanguage;
+  }
 
   $('settings-toggle').addEventListener('click', () => {
     const s = $('settings');
@@ -60,6 +64,9 @@ export function bindSettingsForm(
   });
 
   $('settings-save').addEventListener('click', async () => {
+    const uiLanguageEl = document.getElementById('ui-language');
+    const uiLanguage =
+      uiLanguageEl instanceof HTMLSelectElement ? uiLanguageEl.value : initial.uiLanguage;
     const parsed = ProviderSettingsSchema.safeParse({
       apiKey: $<HTMLInputElement>('api-key').value.trim(),
       baseUrl: $<HTMLInputElement>('base-url').value.trim(),
@@ -67,6 +74,7 @@ export function bindSettingsForm(
       minCards: Number($<HTMLInputElement>('min-cards').value),
       maxCards: Number($<HTMLInputElement>('max-cards').value),
       summaryLanguage: $<HTMLSelectElement>('summary-language').value,
+      uiLanguage,
       cardDensity: $<HTMLSelectElement>('card-density').value,
       maxDocChars: Number($<HTMLInputElement>('max-doc').value),
       cacheTtlDays: Number($<HTMLInputElement>('cache-ttl-days').value),
@@ -79,8 +87,14 @@ export function bindSettingsForm(
       return;
     }
     clearSettingsError();
+    const localeChanged = parsed.data.uiLanguage !== initial.uiLanguage;
     await deps.saveSettings(parsed.data);
     deps.setStatus(t('settingsSaved'));
+    if (localeChanged) {
+      // Re-load so applyI18n picks up the new override and dynamic strings
+      // already rendered re-render in the new locale.
+      window.location.reload();
+    }
   });
 
   bindCacheControls(deps);

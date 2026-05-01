@@ -23,6 +23,9 @@ export const CACHE_TTL_DAYS_DEFAULT = 7;
 export const CACHE_TTL_DAYS_MIN = 1;
 export const CACHE_TTL_DAYS_MAX = 90;
 
+export const UiLanguageSchema = z.enum(['auto', 'en', 'zh_CN']);
+export type UiLanguage = z.infer<typeof UiLanguageSchema>;
+
 export const ProviderSettingsSchema = z.object({
   apiKey: z.string().default(''),
   baseUrl: z.string().default('https://api.deepseek.com/v1'),
@@ -31,6 +34,7 @@ export const ProviderSettingsSchema = z.object({
   maxCards: z.number().int().min(1).default(10),
   maxDocChars: z.number().int().min(500).default(20000),
   summaryLanguage: SummaryLanguageSchema.default('zh-CN'),
+  uiLanguage: UiLanguageSchema.default('auto'),
   cardDensity: CardDensitySchema.default('normal'),
   cacheTtlDays: z
     .number()

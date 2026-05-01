@@ -4,7 +4,7 @@ import {
   selectExtractedTextVersion,
 } from './shared/extraction-quality';
 import { computeContentFingerprint } from './shared/fingerprint';
-import { applyI18n, t } from './shared/i18n';
+import { applyI18n, setLocaleOverride, t } from './shared/i18n';
 import { contentScriptInjectionHint } from './shared/page-support';
 import {
   type AnalyzeResponse,
@@ -739,12 +739,13 @@ async function consumePendingAnalyze(): Promise<PendingAnalyzeRequest | null> {
 }
 
 async function init(): Promise<void> {
-  applyI18n();
   const [settings, debugMode, theme] = await Promise.all([
     loadSettings(),
     loadDebugMode(),
     loadTheme(),
   ]);
+  setLocaleOverride(settings.uiLanguage);
+  applyI18n();
   bindSettingsForm(settings, {
     setStatus,
     saveSettings,
