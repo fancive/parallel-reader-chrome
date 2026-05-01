@@ -1,7 +1,6 @@
 node_modules/
 dist/
 .tmp/
-.agent/
 reports/
 .e2e/artifact.json
 .e2e/artifact.json.sig
@@ -13,4 +12,7 @@ reports/
 # Vendored Python tools
 __pycache__/
 *.pyc
+
+# Local agent / orchestrator state
 .agent/
+.claude/
