@@ -15,7 +15,7 @@ function applySubstitutions(template, substitutions) {
   const arr = Array.isArray(substitutions) ? substitutions : [substitutions];
   let out = template;
   for (let i = 0; i < arr.length; i++) {
-    const placeholder = '$' + (i + 1);
+    const placeholder = `$${i + 1}`;
     // Replace all occurrences without using a regex (avoids escaping headaches).
     out = out.split(placeholder).join(String(arr[i]));
   }

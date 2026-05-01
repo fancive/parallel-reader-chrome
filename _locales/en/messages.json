@@ -206,6 +206,35 @@
     "message": "Response schema mismatch: $1",
     "description": "$1 = first 200 chars of the validation error"
   },
+  "providerErrorTimeout": {
+    "message": "Request timed out after $1s. Try again or check your network.",
+    "description": "$1 = timeout in seconds"
+  },
+  "providerErrorNetwork": {
+    "message": "Network error. Check your connection and the Base URL."
+  },
+  "providerErrorUnauthorized": {
+    "message": "API key was rejected (401). Verify the key in Settings."
+  },
+  "providerErrorForbidden": {
+    "message": "Provider denied access (403). The API key may lack permission for this model."
+  },
+  "providerErrorRateLimited": {
+    "message": "Rate limit reached (429). $1",
+    "description": "$1 = optional retry hint, may be empty"
+  },
+  "providerErrorRetryAfter": {
+    "message": "Retry after $1s.",
+    "description": "$1 = Retry-After header value"
+  },
+  "providerErrorServer": {
+    "message": "Provider server error ($1). Please retry later.",
+    "description": "$1 = HTTP status code"
+  },
+  "providerErrorHttp": {
+    "message": "Provider returned HTTP $1: $2",
+    "description": "$1 = status code, $2 = first 200 chars of body"
+  },
 
   "clipboardWriteDenied": { "message": "Browser denied the clipboard write." },
   "clipboardCopyFailed": {
@@ -240,6 +269,9 @@
     "message": "Local mode: the API key is stored only in this Chrome profile. A backend or ephemeral-token model is required before public release."
   },
   "settingsBtnHistory": { "message": "📚 View history" },
+  "settingsLabelApiKey": { "message": "API Key" },
+  "settingsLabelBaseUrl": { "message": "Base URL" },
+  "settingsLabelModel": { "message": "Model" },
   "settingsLabelCards": { "message": "Cards" },
   "settingsLabelUiLanguage": { "message": "Interface language" },
   "uiLanguageOptionAuto": { "message": "Follow Chrome (auto)" },

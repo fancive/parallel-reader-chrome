@@ -122,6 +122,17 @@ export type LocaleKey =
   | 'providerErrorEmptyResponse'
   | 'providerErrorJsonParse'
   | 'providerErrorSchemaMismatch'
+  | 'providerErrorTimeout'
+  | 'providerErrorNetwork'
+  | 'providerErrorUnauthorized'
+  | 'providerErrorForbidden'
+  | 'providerErrorRateLimited'
+  | 'providerErrorRetryAfter'
+  | 'providerErrorServer'
+  | 'providerErrorHttp'
+  | 'settingsLabelApiKey'
+  | 'settingsLabelBaseUrl'
+  | 'settingsLabelModel'
   | 'clipboardWriteDenied'
   | 'clipboardCopyFailed'
   | 'cardHighlightAriaLabel'
@@ -210,7 +221,7 @@ function applySubstitutions(template: string, substitutions: string | readonly s
   const arr = Array.isArray(substitutions) ? substitutions : [substitutions];
   let out = template;
   for (let i = 0; i < arr.length; i++) {
-    out = out.split('$' + (i + 1)).join(String(arr[i]));
+    out = out.split(`$${i + 1}`).join(String(arr[i]));
   }
   return out;
 }

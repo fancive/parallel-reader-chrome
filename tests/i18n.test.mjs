@@ -66,7 +66,7 @@ test('chrome.i18n.getMessage substitutes $1..$N from a passed string array', () 
     const arr = Array.isArray(subs) ? subs : subs === undefined ? [] : [subs];
     let out = template;
     for (let i = 0; i < arr.length; i++) {
-      out = out.split('$' + (i + 1)).join(String(arr[i]));
+      out = out.split(`$${i + 1}`).join(String(arr[i]));
     }
     return out;
   }
