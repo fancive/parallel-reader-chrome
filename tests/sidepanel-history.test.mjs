@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import './helpers/i18n-mock.mjs';
 
 const tmpRoot = join(process.cwd(), '.tmp');
 await mkdir(tmpRoot, { recursive: true });
@@ -183,16 +184,16 @@ test('parseHistoryEntry returns null when url is missing everywhere', () => {
   assert.equal(entry, null);
 });
 
-test('formatAnalyzedAt returns 未知时间 for missing or zero timestamp', () => {
-  assert.equal(formatAnalyzedAt(0), '未知时间');
-  assert.equal(formatAnalyzedAt(undefined), '未知时间');
-  assert.equal(formatAnalyzedAt(-1), '未知时间');
+test('formatAnalyzedAt returns the unknown-time message for missing or zero timestamp', () => {
+  assert.equal(formatAnalyzedAt(0), 'Unknown time');
+  assert.equal(formatAnalyzedAt(undefined), 'Unknown time');
+  assert.equal(formatAnalyzedAt(-1), 'Unknown time');
 });
 
 test('formatAnalyzedAt returns a non-empty stamp for a real timestamp', () => {
   const stamp = formatAnalyzedAt(1_700_000_000_000, 'en-US');
   assert.ok(stamp.length > 0);
-  assert.notEqual(stamp, '未知时间');
+  assert.notEqual(stamp, 'Unknown time');
 });
 
 test('truncateUrl shortens long URLs with ellipsis', () => {

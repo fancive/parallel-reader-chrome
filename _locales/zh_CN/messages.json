@@ -80,5 +80,39 @@
   "historyOpen": { "message": "打开" },
   "historyExportMarkdown": { "message": "导出 Markdown" },
   "historyDelete": { "message": "删除" },
-  "historyDeleteConfirm": { "message": "确认删除" }
+  "historyDeleteConfirm": { "message": "确认删除" },
+  "historyUnknownTime": { "message": "未知时间" },
+
+  "errorTabNoUrl": { "message": "当前标签页没有 URL" },
+  "pageNoReadableText": { "message": "页面无可读文本" },
+
+  "qualityNoTextLabel": { "message": "页面无可读文本" },
+  "qualityNoTextDetail": { "message": "当前页面可能还未加载完成、需要登录，或不是正文页面。" },
+  "qualityShortLabel": { "message": "可读文本偏短" },
+  "qualityShortDetail": { "message": "页面可能未加载完整、正文被登录墙截断，或当前不是文章正文页。" },
+  "qualityRawLabel": { "message": "使用原文文本" },
+  "qualityRawDetail": { "message": "未抽取到稳定正文，结果可能混入导航、评论或广告文本。" },
+  "qualityOkLabel": { "message": "抽取正常" },
+  "qualityOkDetail": { "message": "当前页面正文长度足够，已使用稳定文本版本生成卡片。" },
+
+  "pageSupportInvalidUrl": { "message": "当前页面 URL 无法解析，暂时无法阅读。" },
+  "pageSupportInternalPage": { "message": "当前页面是浏览器内部页或扩展页，无法阅读。请切换到普通网页后再试。" },
+  "pageSupportPdfNotSupported": { "message": "暂不支持浏览器 PDF 阅读器。请打开网页正文或可复制文本版本。" },
+  "pageSupportProtocolUnsupported": { "message": "当前页面协议 $1 暂不支持内容脚本抽取。" },
+  "pageSupportFileAccessHint": { "message": "请先在 chrome://extensions 为该扩展开启“允许访问文件网址”，或改用本地 HTTP 页面。" },
+
+  "providerErrorMissingApiKey": { "message": "API key 未配置" },
+  "providerErrorMissingBaseUrl": { "message": "Base URL 未配置" },
+  "providerErrorEmptyResponse": { "message": "LLM 返回空内容" },
+  "providerErrorJsonParse": { "message": "无法解析 JSON: $1" },
+  "providerErrorSchemaMismatch": { "message": "返回 schema 不符: $1" },
+
+  "clipboardWriteDenied": { "message": "浏览器拒绝写入剪贴板" },
+  "clipboardCopyFailed": { "message": "复制失败: $1" },
+
+  "cardHighlightAriaLabel": { "message": "高亮定位第 $1 张卡片" },
+  "cardCannotLocateAriaLabel": { "message": "第 $1 张卡片暂时无法定位" },
+  "cardClickToHighlightTitle": { "message": "点击高亮定位，右键查看更多操作" },
+  "cardRightClickActionsTitle": { "message": "右键查看更多操作" },
+  "badgeLocate": { "message": "定位" }
 }

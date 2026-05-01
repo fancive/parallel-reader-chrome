@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 export type ExtractedTextVersion = 'raw' | 'readability';
 
 export type ExtractionQualityReason =
@@ -37,8 +39,8 @@ export function assessExtractionQuality(
     return {
       level: 'warn',
       reason: 'empty',
-      label: '页面无可读文本',
-      detail: '当前页面可能还未加载完成、需要登录，或不是正文页面。',
+      label: t('qualityNoTextLabel'),
+      detail: t('qualityNoTextDetail'),
       selectedTextLength,
     };
   }
@@ -47,8 +49,8 @@ export function assessExtractionQuality(
     return {
       level: 'warn',
       reason: 'short-text',
-      label: '可读文本偏短',
-      detail: '页面可能未加载完整、正文被登录墙截断，或当前不是文章正文页。',
+      label: t('qualityShortLabel'),
+      detail: t('qualityShortDetail'),
       selectedTextLength,
     };
   }
@@ -57,8 +59,8 @@ export function assessExtractionQuality(
     return {
       level: 'warn',
       reason: 'raw-fallback',
-      label: '使用原文文本',
-      detail: '未抽取到稳定正文，结果可能混入导航、评论或广告文本。',
+      label: t('qualityRawLabel'),
+      detail: t('qualityRawDetail'),
       selectedTextLength,
     };
   }
@@ -66,8 +68,8 @@ export function assessExtractionQuality(
   return {
     level: 'ok',
     reason: 'ok',
-    label: '抽取正常',
-    detail: '当前页面正文长度足够，已使用稳定文本版本生成卡片。',
+    label: t('qualityOkLabel'),
+    detail: t('qualityOkDetail'),
     selectedTextLength,
   };
 }

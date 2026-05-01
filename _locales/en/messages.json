@@ -155,5 +155,75 @@
   "historyOpen": { "message": "Open" },
   "historyExportMarkdown": { "message": "Export Markdown" },
   "historyDelete": { "message": "Delete" },
-  "historyDeleteConfirm": { "message": "Confirm delete" }
+  "historyDeleteConfirm": { "message": "Confirm delete" },
+  "historyUnknownTime": { "message": "Unknown time" },
+
+  "errorTabNoUrl": { "message": "Current tab has no URL." },
+  "pageNoReadableText": { "message": "Page has no readable text." },
+
+  "qualityNoTextLabel": { "message": "Page has no readable text" },
+  "qualityNoTextDetail": {
+    "message": "The page may still be loading, may require sign-in, or may not be an article body."
+  },
+  "qualityShortLabel": { "message": "Readable text is short" },
+  "qualityShortDetail": {
+    "message": "The page may not be fully loaded, gated by a paywall, or not an article body."
+  },
+  "qualityRawLabel": { "message": "Using raw text" },
+  "qualityRawDetail": {
+    "message": "No stable article body extracted; results may mix navigation, comments, or ads."
+  },
+  "qualityOkLabel": { "message": "Extraction OK" },
+  "qualityOkDetail": {
+    "message": "Article body is long enough; cards were generated from the stable text."
+  },
+
+  "pageSupportInvalidUrl": {
+    "message": "Cannot parse the current page URL; reading is unavailable."
+  },
+  "pageSupportInternalPage": {
+    "message": "This is a browser internal page or extension page. Switch to a regular web page and try again."
+  },
+  "pageSupportPdfNotSupported": {
+    "message": "Browser PDF viewer is not supported yet. Open the article body or a copyable text view."
+  },
+  "pageSupportProtocolUnsupported": {
+    "message": "Content scripts are not supported on the $1 protocol.",
+    "description": "$1 = page protocol such as 'about:' or 'view-source:'"
+  },
+  "pageSupportFileAccessHint": {
+    "message": "Enable “Allow access to file URLs” for this extension in chrome://extensions, or use a local HTTP page instead."
+  },
+
+  "providerErrorMissingApiKey": { "message": "API key not configured." },
+  "providerErrorMissingBaseUrl": { "message": "Base URL not configured." },
+  "providerErrorEmptyResponse": { "message": "LLM returned empty content." },
+  "providerErrorJsonParse": {
+    "message": "Cannot parse JSON: $1",
+    "description": "$1 = first 200 chars of the offending response"
+  },
+  "providerErrorSchemaMismatch": {
+    "message": "Response schema mismatch: $1",
+    "description": "$1 = first 200 chars of the validation error"
+  },
+
+  "clipboardWriteDenied": { "message": "Browser denied the clipboard write." },
+  "clipboardCopyFailed": {
+    "message": "Copy failed: $1",
+    "description": "$1 = error message"
+  },
+
+  "cardHighlightAriaLabel": {
+    "message": "Highlight card #$1",
+    "description": "$1 = 1-based card index"
+  },
+  "cardCannotLocateAriaLabel": {
+    "message": "Card #$1 cannot be located right now",
+    "description": "$1 = 1-based card index"
+  },
+  "cardClickToHighlightTitle": {
+    "message": "Click to highlight; right-click for more actions"
+  },
+  "cardRightClickActionsTitle": { "message": "Right-click for more actions" },
+  "badgeLocate": { "message": "Locate" }
 }

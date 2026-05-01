@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n';
 import { type Card, PAGE_STATE_PREFIX } from '../shared/types';
 
 export type HistoryEntry = {
@@ -116,9 +117,9 @@ export async function clearAllHistory(storage: HistoryStorage): Promise<void> {
 }
 
 export function formatAnalyzedAt(analyzedAt: number, locale?: string): string {
-  if (!analyzedAt || analyzedAt <= 0) return '未知时间';
+  if (!analyzedAt || analyzedAt <= 0) return t('historyUnknownTime');
   const date = new Date(analyzedAt);
-  if (Number.isNaN(date.getTime())) return '未知时间';
+  if (Number.isNaN(date.getTime())) return t('historyUnknownTime');
   return date.toLocaleString(locale);
 }
 

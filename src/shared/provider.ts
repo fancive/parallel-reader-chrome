@@ -1,4 +1,5 @@
 import { repairCardAnchors } from './anchor-repair';
+import { t } from './i18n';
 import { extractJsonObject } from './json-extract';
 import { buildPrompts } from './prompt';
 import { type Card, CardsResponseSchema, type ProviderSettings } from './types';
@@ -15,8 +16,8 @@ export async function callProvider(
   content: string,
   settings: Readonly<ProviderSettings>,
 ): Promise<readonly Card[]> {
-  if (!settings.apiKey) throw new Error('API key 未配置');
-  if (!settings.baseUrl) throw new Error('Base URL 未配置');
+  if (!settings.apiKey) throw new Error(t('providerErrorMissingApiKey'));
+  if (!settings.baseUrl) throw new Error(t('providerErrorMissingBaseUrl'));
 
   const { system, user } = buildPrompts(content, settings);
   const url = `${settings.baseUrl.replace(/\/$/, '')}/chat/completions`;
@@ -48,14 +49,16 @@ export async function callProvider(
   if (json.error?.message) throw new Error(json.error.message);
 
   const choice = json.choices?.[0]?.message?.content ?? '';
-  if (!choice) throw new Error('LLM 返回空内容');
+  if (!choice) throw new Error(t('providerErrorEmptyResponse'));
 
   const obj = extractJsonObject(choice);
-  if (obj === undefined) throw new Error(`无法解析 JSON: ${choice.slice(0, 200)}`);
+  if (obj === undefined) throw new Error(t('providerErrorJsonParse', [choice.slice(0, 200)]));
 
   const parsed = CardsResponseSchema.safeParse(obj);
   if (!parsed.success) {
-    throw new Error(`返回 schema 不符: ${parsed.error.message.slice(0, 200)}`);
+    throw new Error(
+      t('providerErrorSchemaMismatch', [parsed.error.message.slice(0, 200)]),
+    );
   }
   return repairCardAnchors(content, parsed.data.cards);
 }

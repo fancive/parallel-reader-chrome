@@ -1,4 +1,5 @@
 import { selectExtractedTextVersion } from './shared/extraction-quality';
+import { t } from './shared/i18n';
 import { logWarn } from './shared/logger';
 import { buildPendingAnalyzeRequest } from './shared/pending-analyze';
 import { callProvider } from './shared/provider';
@@ -108,7 +109,7 @@ async function handleAnalyze(req: AnalyzeRequest): Promise<AnalyzeResponse> {
     const settings = await loadSettings();
     const usedText = selectExtractedTextVersion(req.readabilityText.length);
     const text = usedText === 'readability' ? req.readabilityText : req.rawText;
-    if (!text.trim()) return { ok: false, error: '页面无可读文本' };
+    if (!text.trim()) return { ok: false, error: t('pageNoReadableText') };
     const cards = await callProvider(text, settings);
     return { ok: true, cards, usedText };
   } catch (error: unknown) {

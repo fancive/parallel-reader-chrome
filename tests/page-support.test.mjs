@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import './helpers/i18n-mock.mjs';
 
 const tmpRoot = join(process.cwd(), '.tmp');
 await mkdir(tmpRoot, { recursive: true });
@@ -33,21 +34,21 @@ test('unsupportedPageReason allows normal article URLs', () => {
 test('unsupportedPageReason explains browser internal pages', () => {
   const reason = unsupportedPageReason('chrome://extensions');
 
-  assert.match(reason ?? '', /浏览器内部页/);
-  assert.match(reason ?? '', /无法阅读/);
+  assert.match(reason ?? '', /browser internal page or extension page/i);
+  assert.match(reason ?? '', /switch to a regular web page/i);
 });
 
 test('unsupportedPageReason explains extension pages', () => {
   const reason = unsupportedPageReason('chrome-extension://abc123/sidepanel.html');
 
-  assert.match(reason ?? '', /扩展页/);
+  assert.match(reason ?? '', /extension page/i);
 });
 
 test('unsupportedPageReason explains PDF pages', () => {
   const reason = unsupportedPageReason('https://example.com/report.PDF');
 
   assert.match(reason ?? '', /PDF/);
-  assert.match(reason ?? '', /可复制文本/);
+  assert.match(reason ?? '', /copyable text/i);
 });
 
 test('unsupportedPageReason allows file URLs so Chrome file-access settings can decide', () => {
@@ -57,5 +58,5 @@ test('unsupportedPageReason allows file URLs so Chrome file-access settings can 
 test('contentScriptInjectionHint explains file URL requirements after injection failure', () => {
   const hint = contentScriptInjectionHint('file:///Users/example/article.html');
 
-  assert.match(hint, /允许访问文件网址/);
+  assert.match(hint, /Allow access to file URLs/i);
 });
