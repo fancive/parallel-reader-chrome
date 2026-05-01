@@ -369,6 +369,8 @@ async function launchExtension() {
     args: [
       `--disable-extensions-except=${distDir}`,
       `--load-extension=${distDir}`,
+      '--disable-gpu',
+      '--in-process-gpu',
       '--disable-features=DisableLoadExtensionCommandLineSwitch',
       '--no-first-run',
       '--no-default-browser-check',
@@ -959,6 +961,8 @@ async function relaunchExtensionPreservingProfile() {
     args: [
       `--disable-extensions-except=${distDir}`,
       `--load-extension=${distDir}`,
+      '--disable-gpu',
+      '--in-process-gpu',
       '--no-first-run',
       '--no-default-browser-check',
     ],
