@@ -8,7 +8,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Biome](https://img.shields.io/badge/lint-Biome-60A5FA?logo=biome&logoColor=white)](biome.json)
 [![esbuild](https://img.shields.io/badge/build-esbuild-FFCF00?logo=esbuild&logoColor=black)](esbuild.config.mjs)
-[![tests](https://img.shields.io/badge/tests-75%20passing-2EA043)](tests)
+[![tests](https://img.shields.io/badge/tests-93%20passing-2EA043)](tests)
 [![status](https://img.shields.io/badge/status-prototype%20%C2%B7%20BYOK-orange)](#credential-boundary-and-release-decision)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -54,9 +54,15 @@ state by URL, so a page can recover its cards after browser restart.
 - **Three-way anchor validation** — every anchor is checked against raw page
   text, Mozilla Readability article text, and a live DOM Range, so you see
   honestly which cards are still locatable.
-- **Persistent per-URL cache** — switch pages, recreate tabs, or restart
-  Chrome without losing cards; rerun replaces the cached result only after a
-  successful analysis.
+- **Persistent per-URL cache with governance** — switch pages, recreate
+  tabs, or restart Chrome without losing cards. Each entry carries a
+  content fingerprint and a configurable TTL (default 7 days), so when the
+  page changes the side panel shows a "rerun" banner instead of silently
+  restoring stale cards. Settings exposes one-click *Clear cards for this
+  page* and *Clear all cached pages*.
+- **History / library view** — list every URL you have analyzed with title,
+  timestamp, and card count; reopen, delete individually, or bulk-export
+  the whole library as Markdown / JSON.
 - **Copy quote / copy summary** — works even when the live DOM no longer
   matches the cached anchor (DOM-miss cards are still useful for note-taking).
 - **Configurable density and language** — concise / normal / detailed bullet
@@ -216,6 +222,7 @@ npm run dev        # watch build into dist/
 npm run build      # production-style local build
 npm run check      # test + lint + typecheck + build + audit
 npm run e2e        # project-local .e2e contract gate (Playwright)
+npm run e2e:linux  # same gate inside a Linux container (mirrors CI Chromium-for-Testing)
 npm run lint       # Biome lint baseline for src/, scripts/, tests/, build config
 npm test           # node --test test suite
 npm run typecheck  # TypeScript only
@@ -249,10 +256,14 @@ src/
     clipboard.ts           clipboard helpers + fallback
     concurrency.ts         runWithConcurrency, debounce
     dom.ts                 $, escapeHtml, errorMessage helpers
+    history.ts             per-URL history index + Markdown / JSON export
+    history-view.ts        history panel rendering
     menu.ts                card context menu (keyboard navigable)
+    page-identity.ts       URL normalization for cache key
     settings-form.ts       settings panel binding + inline error
-tests/                     node --test specs (75 tests)
-scripts/                   anchor smoke CLI
+tests/                     node --test specs (93 tests)
+scripts/                   anchor smoke CLI + e2e-linux container helper
+tools/e2e/                 vendored e2e_contract_validator (Python, gate-only)
 .e2e/                      project-local E2E contract (gate.sh + Playwright)
 ```
 
