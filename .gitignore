@@ -13,3 +13,4 @@ reports/
 # Vendored Python tools
 __pycache__/
 *.pyc
+.agent/

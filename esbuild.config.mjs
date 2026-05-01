@@ -23,6 +23,19 @@ async function copyStatic() {
   } catch {
     // no icons yet, fine
   }
+  // copy _locales/<locale>/messages.json
+  const localesSrc = join(__dirname, '_locales');
+  try {
+    const locales = await readdir(localesSrc);
+    for (const locale of locales) {
+      const messagesSrc = join(localesSrc, locale, 'messages.json');
+      const messagesDst = join(outdir, '_locales', locale, 'messages.json');
+      await mkdir(dirname(messagesDst), { recursive: true });
+      await copyFile(messagesSrc, messagesDst);
+    }
+  } catch {
+    // no _locales yet, fine
+  }
 }
 
 const entries = {

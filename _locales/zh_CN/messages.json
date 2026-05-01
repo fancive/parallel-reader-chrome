@@ -1,0 +1,18 @@
+{
+  "appName": {
+    "message": "Parallel Reader",
+    "description": "Extension display name"
+  },
+  "appDescription": {
+    "message": "为任意网页生成定位到原文引用的摘要卡片。",
+    "description": "Short extension description shown in chrome://extensions and the Web Store"
+  },
+  "actionDefaultTitle": {
+    "message": "Parallel Reader",
+    "description": "Tooltip shown on the toolbar action button"
+  },
+  "commandAnalyzePage": {
+    "message": "打开 Parallel Reader 并分析当前页面",
+    "description": "Description for the Alt+Shift+R keyboard shortcut"
+  }
+}

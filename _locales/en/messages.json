@@ -1,0 +1,18 @@
+{
+  "appName": {
+    "message": "Parallel Reader",
+    "description": "Extension display name"
+  },
+  "appDescription": {
+    "message": "LLM summary cards anchored to verbatim quotes in the page DOM.",
+    "description": "Short extension description shown in chrome://extensions and the Web Store"
+  },
+  "actionDefaultTitle": {
+    "message": "Parallel Reader",
+    "description": "Tooltip shown on the toolbar action button"
+  },
+  "commandAnalyzePage": {
+    "message": "Open Parallel Reader and analyze the current page",
+    "description": "Description for the Alt+Shift+R keyboard shortcut"
+  }
+}

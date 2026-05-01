@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Parallel Reader",
+  "name": "__MSG_appName__",
   "version": "0.0.2",
-  "description": "LLM summary cards anchored to verbatim quotes in the page DOM.",
+  "description": "__MSG_appDescription__",
+  "default_locale": "en",
   "minimum_chrome_version": "114",
   "permissions": ["sidePanel", "storage", "activeTab", "tabs", "scripting"],
   "host_permissions": ["<all_urls>"],
   "action": {
-    "default_title": "Parallel Reader"
+    "default_title": "__MSG_actionDefaultTitle__"
   },
   "background": {
     "service_worker": "background.js",
@@ -33,7 +34,7 @@
         "default": "Alt+Shift+R",
         "mac": "Alt+Shift+R"
       },
-      "description": "Open Parallel Reader and analyze the current page"
+      "description": "__MSG_commandAnalyzePage__"
     }
   }
 }
