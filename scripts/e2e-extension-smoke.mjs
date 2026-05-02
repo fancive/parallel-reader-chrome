@@ -367,7 +367,6 @@ async function launchExtension() {
   const launchOptions = {
     headless: false,
     executablePath,
-    cdpPort: 0,
     ignoreDefaultArgs: ['--disable-extensions', '--disable-component-extensions-with-background-pages'],
     args: [
       `--disable-extensions-except=${distDir}`,
@@ -960,7 +959,6 @@ async function relaunchExtensionPreservingProfile() {
   const launchOptions = {
     headless: false,
     executablePath,
-    cdpPort: 0,
     ignoreDefaultArgs: ['--disable-extensions', '--disable-component-extensions-with-background-pages'],
     args: [
       `--disable-extensions-except=${distDir}`,
