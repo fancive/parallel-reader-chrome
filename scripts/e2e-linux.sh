@@ -37,5 +37,5 @@ docker run --rm -t \
     mkdir -p /run/dbus
     dbus-daemon --system --fork
     npm ci
-    dbus-run-session -- xvfb-run -a npm run e2e
+    dbus-run-session -- xvfb-run -a bash .e2e/run.sh
   '

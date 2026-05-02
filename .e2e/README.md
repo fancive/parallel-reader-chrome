@@ -8,6 +8,16 @@ Run the host-neutral gate:
 npm run e2e
 ```
 
+CI currently records a temporary `env_unavailable_blocked` exemption because
+GitHub Actions Linux has not been able to complete Playwright Chromium
+`launchPersistentContext` for the MV3 extension smoke. The full smoke remains
+available for focused diagnosis:
+
+```bash
+bash .e2e/run.sh
+npm run e2e:linux
+```
+
 If `e2e_contract_validator` is not installed, either run from this workspace layout where `../claude-code-addons/scripts` exists, or set:
 
 ```bash

@@ -1,0 +1,7 @@
+{
+  "type": "env_unavailable_blocked",
+  "evidence": {
+    "failed_precondition": "GitHub Actions Linux E2E cannot currently complete Playwright Chromium launchPersistentContext for the MV3 extension smoke. PR #7 reproduced browserType.launchPersistentContext: Timeout 180000ms exceeded after runner pinning, GPU flag changes, Playwright transport changes, Dockerized Playwright Jammy execution, dbus setup, and artifact permission fixes. Latest observed run: https://github.com/fancive/parallel-reader-chrome/actions/runs/25240549884",
+    "expected_unblock_condition": "Remove this exemption after a minimal Linux probe verifies Chromium can launch a persistent context for this unpacked MV3 extension and npm run e2e passes in GitHub Actions without the Dockerized e2e:linux workaround."
+  }
+}

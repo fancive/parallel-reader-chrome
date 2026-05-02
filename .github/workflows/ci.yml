@@ -25,17 +25,8 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Stable Google Chrome on Linux (137+) silently blocks --load-extension
-      # even with --disable-features=DisableLoadExtensionCommandLineSwitch and
-      # extensions.ui.developer_mode=true seeded into the profile. Use the
-      # Chromium for Testing build that ships with playwright-core, which is
-      # designed for automation and honors --load-extension reliably.
-
       - name: Install
         run: npm ci
-
-      - name: Install Playwright Chromium
-        run: npx playwright-core install --with-deps chromium
 
       - name: Lint
         run: npm run lint
@@ -58,7 +49,7 @@ jobs:
       - name: E2E Gate
         env:
           E2E_CONTRACT_VALIDATOR_PYTHONPATH: ${{ github.workspace }}/tools/e2e
-        run: timeout 1200 npm run e2e:linux
+        run: npm run e2e
 
       - name: Upload E2E Artifacts on Failure
         if: failure()
