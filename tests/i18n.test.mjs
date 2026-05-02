@@ -59,6 +59,29 @@ test('placeholders ($1..$9) match between en and zh_CN for the same key', () => 
   }
 });
 
+test('every $NAME$ token used in a message is declared in its placeholders block', () => {
+  // Chrome's i18n parser scans messages for $NAME$ tokens (letters/digits/_) and
+  // requires each one to be declared under "placeholders". Adjacent numeric
+  // substitutions like "$1$2" get misread as the named placeholder "$1$"
+  // followed by literal "2", which fails validation at extension load time.
+  const namedTokenRegex = /\$([A-Za-z0-9_@]+)\$/g;
+  for (const [locale, table] of [['en', en], ['zh_CN', zh]]) {
+    for (const [key, entry] of Object.entries(table)) {
+      const tokens = [...entry.message.matchAll(namedTokenRegex)].map((m) => m[1]);
+      if (tokens.length === 0) continue;
+      const declared = new Set(
+        Object.keys(entry.placeholders ?? {}).map((n) => n.toLowerCase()),
+      );
+      for (const token of tokens) {
+        assert.ok(
+          declared.has(token.toLowerCase()),
+          `${locale}.${key} uses $${token}$ but no placeholder is declared (message: ${JSON.stringify(entry.message)})`,
+        );
+      }
+    }
+  }
+});
+
 test('chrome.i18n.getMessage substitutes $1..$N from a passed string array', () => {
   // Simulates the runtime substitution chrome.i18n performs so we know our
   // t() wrapper round-trips values correctly when locale is zh_CN.

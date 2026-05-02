@@ -45,7 +45,13 @@
   "errorMissingProviderSettings": { "message": "请先保存 API Key、Base URL 和 Model 后再分析当前页" },
   "errorNoActiveTab": { "message": "找不到活动标签页" },
   "errorCannotOpenPage": { "message": "无法打开页面: $1" },
-  "pageNotReadable": { "message": "当前页面暂时无法阅读。$1$2" },
+  "pageNotReadable": {
+    "message": "当前页面暂时无法阅读。$HINT$$DETAIL$",
+    "placeholders": {
+      "hint": { "content": "$1" },
+      "detail": { "content": "$2" }
+    }
+  },
   "hintRefreshOrSwitch": { "message": "请刷新页面，或切换到普通网页后再试。" },
 
   "btnAnalyze": { "message": "分析当前页" },

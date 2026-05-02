@@ -87,8 +87,12 @@
     "description": "$1 = error message"
   },
   "pageNotReadable": {
-    "message": "This page is not currently readable. $1$2",
-    "description": "$1 = hint sentence, $2 = optional detail in parentheses"
+    "message": "This page is not currently readable. $HINT$$DETAIL$",
+    "description": "$HINT$ = hint sentence, $DETAIL$ = optional detail in parentheses",
+    "placeholders": {
+      "hint": { "content": "$1" },
+      "detail": { "content": "$2" }
+    }
   },
   "hintRefreshOrSwitch": {
     "message": "Refresh the page or switch to a regular web page and try again."
