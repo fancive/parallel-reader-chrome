@@ -47,6 +47,17 @@
       </fieldset>
       <p class="settings-note" data-i18n="settingsLocalModeNote"></p>
       <button id="history-open" class="settings-secondary" type="button" data-i18n="settingsBtnHistory"></button>
+      <label><span data-i18n="settingsLabelApiPreset"></span>
+        <select id="api-preset"></select>
+      </label>
+      <label><span data-i18n="settingsLabelApiFormat"></span>
+        <select id="api-format">
+          <option value="openai-chat" data-i18n="apiFormatOptionOpenAiChat"></option>
+          <option value="openai-responses" data-i18n="apiFormatOptionOpenAiResponses"></option>
+          <option value="anthropic-messages" data-i18n="apiFormatOptionAnthropic"></option>
+          <option value="google-generative-ai" data-i18n="apiFormatOptionGemini"></option>
+        </select>
+      </label>
       <label><span data-i18n="settingsLabelApiKey"></span>
         <input id="api-key" type="password" placeholder="sk-..." autocomplete="off" />
       </label>

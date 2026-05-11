@@ -1,5 +1,12 @@
 import { t } from '../shared/i18n';
 import { logWarn } from '../shared/logger';
+import {
+  type ApiFormat,
+  CUSTOM_PRESET_ID,
+  PROVIDER_PRESETS,
+  getPreset,
+  inferPresetFromUrl,
+} from '../shared/provider';
 import { type ProviderSettings, ProviderSettingsSchema, SETTINGS_KEY } from '../shared/types';
 import { $ } from './dom';
 
@@ -40,13 +47,66 @@ function clearSettingsError(): void {
   }
 }
 
+function populatePresetOptions(select: HTMLSelectElement): void {
+  select.textContent = '';
+  for (const preset of PROVIDER_PRESETS) {
+    const opt = document.createElement('option');
+    opt.value = preset.id;
+    opt.textContent = preset.label;
+    select.appendChild(opt);
+  }
+  const custom = document.createElement('option');
+  custom.value = CUSTOM_PRESET_ID;
+  custom.textContent = t('apiPresetOptionCustom');
+  select.appendChild(custom);
+}
+
+function bindPresetSelector(
+  presetSelect: HTMLSelectElement,
+  formatSelect: HTMLSelectElement,
+  baseUrlInput: HTMLInputElement,
+  modelInput: HTMLInputElement,
+  initial: Readonly<ProviderSettings>,
+): void {
+  populatePresetOptions(presetSelect);
+  presetSelect.value = inferPresetFromUrl(initial.baseUrl, initial.apiFormat);
+  formatSelect.value = initial.apiFormat;
+
+  // Picking a preset: overwrite format/baseUrl/model defaults so the user
+  // doesn't have to retype them. Empty defaultModel (e.g. OpenRouter) leaves
+  // model blank — user must fill it in.
+  presetSelect.addEventListener('change', () => {
+    if (presetSelect.value === CUSTOM_PRESET_ID) return;
+    const preset = getPreset(presetSelect.value);
+    if (!preset) return;
+    formatSelect.value = preset.format;
+    baseUrlInput.value = preset.baseUrl;
+    modelInput.value = preset.defaultModel;
+  });
+
+  // Editing baseUrl manually drops back to "custom" so the selector doesn't
+  // misleadingly show a brand name once the URL has drifted.
+  const refreshPreset = () => {
+    const format = formatSelect.value as ApiFormat;
+    presetSelect.value = inferPresetFromUrl(baseUrlInput.value.trim(), format);
+  };
+  baseUrlInput.addEventListener('input', refreshPreset);
+  formatSelect.addEventListener('change', refreshPreset);
+}
+
 export function bindSettingsForm(
   initial: Readonly<ProviderSettings>,
   deps: SettingsFormDeps,
 ): void {
-  $<HTMLInputElement>('api-key').value = initial.apiKey;
-  $<HTMLInputElement>('base-url').value = initial.baseUrl;
-  $<HTMLInputElement>('model').value = initial.model;
+  const apiKeyInput = $<HTMLInputElement>('api-key');
+  const baseUrlInput = $<HTMLInputElement>('base-url');
+  const modelInput = $<HTMLInputElement>('model');
+  const presetSelect = $<HTMLSelectElement>('api-preset');
+  const formatSelect = $<HTMLSelectElement>('api-format');
+
+  apiKeyInput.value = initial.apiKey;
+  baseUrlInput.value = initial.baseUrl;
+  modelInput.value = initial.model;
   $<HTMLInputElement>('min-cards').value = String(initial.minCards);
   $<HTMLInputElement>('max-cards').value = String(initial.maxCards);
   $<HTMLSelectElement>('summary-language').value = initial.summaryLanguage;
@@ -58,6 +118,8 @@ export function bindSettingsForm(
     uiLanguageSelect.value = initial.uiLanguage;
   }
 
+  bindPresetSelector(presetSelect, formatSelect, baseUrlInput, modelInput, initial);
+
   $('settings-toggle').addEventListener('click', () => {
     const s = $('settings');
     s.hidden = !s.hidden;
@@ -68,9 +130,10 @@ export function bindSettingsForm(
     const uiLanguage =
       uiLanguageEl instanceof HTMLSelectElement ? uiLanguageEl.value : initial.uiLanguage;
     const parsed = ProviderSettingsSchema.safeParse({
-      apiKey: $<HTMLInputElement>('api-key').value.trim(),
-      baseUrl: $<HTMLInputElement>('base-url').value.trim(),
-      model: $<HTMLInputElement>('model').value.trim(),
+      apiKey: apiKeyInput.value.trim(),
+      baseUrl: baseUrlInput.value.trim(),
+      model: modelInput.value.trim(),
+      apiFormat: formatSelect.value,
       minCards: Number($<HTMLInputElement>('min-cards').value),
       maxCards: Number($<HTMLInputElement>('max-cards').value),
       summaryLanguage: $<HTMLSelectElement>('summary-language').value,
@@ -81,7 +144,9 @@ export function bindSettingsForm(
     });
     if (!parsed.success) {
       showSettingsError(
-        t('settingsInvalid', [parsed.error.issues[0]?.message ?? t('settingsCheckInput')]),
+        t('settingsInvalid', {
+          error: parsed.error.issues[0]?.message ?? t('settingsCheckInput'),
+        }),
         deps,
       );
       return;
@@ -150,7 +215,7 @@ function bindCacheControls(deps: SettingsFormDeps): void {
       hideInlineConfirm('cache-clear-all-confirm');
       if (!deps.clearAllPages) return;
       const removed = await deps.clearAllPages();
-      setCacheStatus(t('cacheStatusClearedCount', [removed.toString()]));
+      setCacheStatus(t('cacheStatusClearedCount', { count: removed }));
     });
   }
 }

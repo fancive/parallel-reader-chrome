@@ -1,4 +1,7 @@
 import { z } from 'zod';
+// Import the leaf module directly (not the index) so types.ts ↔ provider/index.ts
+// don't form an evaluation cycle when esbuild bundles tests.
+import { ApiFormatSchema } from './provider/types';
 
 export const CardSchema = z.object({
   title: z.string().min(1),
@@ -30,6 +33,7 @@ export const ProviderSettingsSchema = z.object({
   apiKey: z.string().default(''),
   baseUrl: z.string().default('https://api.deepseek.com/v1'),
   model: z.string().default('deepseek-chat'),
+  apiFormat: ApiFormatSchema.default('openai-chat'),
   minCards: z.number().int().min(1).default(4),
   maxCards: z.number().int().min(1).default(10),
   maxDocChars: z.number().int().min(500).default(20000),

@@ -15,7 +15,7 @@ export function cardSummaryText(card: Readonly<Card>, index: number): string {
   return [
     `${index + 1}. ${card.title}`,
     '',
-    t('clipboardQuoteLine', [card.anchor]),
+    t('clipboardQuoteLine', { text: card.anchor }),
     '',
     card.gist,
     ...bullets,
@@ -112,11 +112,11 @@ export function showCardMenu(
   );
   appendMenuButton(menu, t('menuCopyQuote'), false, async () => {
     closeCardMenu();
-    await copyText(card.anchor, t('menuCopiedQuote', [(index + 1).toString()]), deps.setStatus);
+    await copyText(card.anchor, t('menuCopiedQuote', { index: index + 1 }), deps.setStatus);
   });
   appendMenuButton(menu, t('menuCopySummary'), false, async () => {
     closeCardMenu();
-    await copyText(cardSummaryText(card, index), t('menuCopiedSummary', [(index + 1).toString()]), deps.setStatus);
+    await copyText(cardSummaryText(card, index), t('menuCopiedSummary', { index: index + 1 }), deps.setStatus);
   });
 
   menu.onkeydown = (event) => handleMenuKeydown(event, menu);

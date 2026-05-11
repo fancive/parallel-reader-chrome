@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Fail CI when src/ files contain hard-coded CJK strings.
-// All user-facing text must live in _locales/<locale>/messages.json and
-// flow through chrome.i18n via the t() helper.
+// All user-facing text must flow through the t() helper, sourced from the
+// bundled STRINGS table at src/shared/i18n/strings.ts (the only file
+// allowed to hold raw zh_CN copy).
 //
 // The allow-list below keeps strings that are intentionally not UI
 // (e.g., LLM prompt scaffolding driven by the user's summaryLanguage).
@@ -17,6 +18,8 @@ const srcDir = join(repoRoot, 'src');
 const ALLOW_LIST = new Set([
   // LLM prompt scaffolding (governed by settings.summaryLanguage).
   'src/shared/prompt.ts',
+  // Bundled UI string table — the only place where raw zh_CN copy lives.
+  'src/shared/i18n/strings.ts',
 ]);
 
 const CJK_RANGE = /[一-鿿]/;

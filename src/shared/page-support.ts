@@ -30,7 +30,7 @@ export function unsupportedPageReason(url: string): string | null {
 
   if (parsed.protocol === 'file:') return null;
 
-  return t('pageSupportProtocolUnsupported', [parsed.protocol]);
+  return t('pageSupportProtocolUnsupported', { protocol: parsed.protocol });
 }
 
 export function contentScriptInjectionHint(url: string): string {

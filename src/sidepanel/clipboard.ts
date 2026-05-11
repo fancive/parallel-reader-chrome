@@ -28,6 +28,6 @@ export async function copyText(
     setStatus(okStatus);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(t('clipboardCopyFailed', [msg]));
+    setStatus(t('clipboardCopyFailed', { error: msg }));
   }
 }

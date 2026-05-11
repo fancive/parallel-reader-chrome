@@ -9,8 +9,8 @@ export function cardClassName(canHighlight: boolean): string {
 
 export function cardAriaLabel(index: number, canHighlight: boolean): string {
   return canHighlight
-    ? t('cardHighlightAriaLabel', [(index + 1).toString()])
-    : t('cardCannotLocateAriaLabel', [(index + 1).toString()]);
+    ? t('cardHighlightAriaLabel', { index: index + 1 })
+    : t('cardCannotLocateAriaLabel', { index: index + 1 });
 }
 
 export function cardTitleAttr(canHighlight: boolean): string {
@@ -72,8 +72,8 @@ export function renderCard(result: CardResult, index: number, deps: CardViewDeps
   el.role = 'button';
   el.setAttribute('data-card-index', String(index));
   el.ariaLabel = canHighlight
-    ? t('cardHighlightAriaLabel', [(index + 1).toString()])
-    : t('cardCannotLocateAriaLabel', [(index + 1).toString()]);
+    ? t('cardHighlightAriaLabel', { index: index + 1 })
+    : t('cardCannotLocateAriaLabel', { index: index + 1 });
   el.title = canHighlight ? t('cardClickToHighlightTitle') : t('cardRightClickActionsTitle');
 
   el.appendChild(makeCardHead(card, index, locate));

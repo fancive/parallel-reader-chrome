@@ -95,7 +95,10 @@ async function injectContentScript(tabId: number, pageUrl = ''): Promise<void> {
     const message = errorMessage(error);
     const hint = pageUrl ? contentScriptInjectionHint(pageUrl) : '';
     throw new Error(
-      t('pageNotReadable', [hint || t('hintRefreshOrSwitch'), message ? ` (${message})` : '']),
+      t('pageNotReadable', {
+        hint: hint || t('hintRefreshOrSwitch'),
+        detail: message ? ` (${message})` : '',
+      }),
     );
   }
 }
@@ -210,13 +213,13 @@ async function handleHistoryOpen(entry: Readonly<HistoryEntry>): Promise<void> {
     }
     closeHistoryView();
   } catch (error) {
-    setStatus(t('errorCannotOpenPage', [errorMessage(error)]));
+    setStatus(t('errorCannotOpenPage', { error: errorMessage(error) }));
   }
 }
 
 async function handleHistoryDelete(entry: Readonly<HistoryEntry>): Promise<void> {
   await deleteHistoryEntry(chrome.storage.local, entry.storageKey);
-  setStatus(t('historyDeleted', [entry.title || entry.url]));
+  setStatus(t('historyDeleted', { name: entry.title || entry.url }));
   await refreshHistoryList();
   if (currentPage && currentPage.url === entry.url) {
     setCurrentHasSavedResults(false);
@@ -226,7 +229,7 @@ async function handleHistoryDelete(entry: Readonly<HistoryEntry>): Promise<void>
 function handleHistoryExport(entry: Readonly<HistoryEntry>): void {
   const filename = `${sanitizeFilename(entry.title || entry.url)}.md`;
   triggerDownload(filename, entryToMarkdown(entry), 'text/markdown;charset=utf-8');
-  setStatus(t('historyExportedSingle', [filename]));
+  setStatus(t('historyExportedSingle', { name: filename }));
 }
 
 async function handleExportAll(): Promise<void> {
@@ -237,7 +240,7 @@ async function handleExportAll(): Promise<void> {
   }
   const filename = `parallel-reader-history-${new Date().toISOString().slice(0, 10)}.json`;
   triggerDownload(filename, entriesToJson(entries), 'application/json;charset=utf-8');
-  setStatus(t('historyExportedAll', [entries.length.toString()]));
+  setStatus(t('historyExportedAll', { count: entries.length }));
 }
 
 async function handleClearAll(): Promise<void> {
@@ -402,7 +405,7 @@ async function highlightCardAnchor(
 ): Promise<void> {
   closeCardMenu();
   if (!canHighlight) {
-    setStatus(t('cardNotFoundInPage', [(index + 1).toString()]));
+    setStatus(t('cardNotFoundInPage', { index: index + 1 }));
     return;
   }
   const page = await activePage();
@@ -416,9 +419,9 @@ async function highlightCardAnchor(
   };
   if (r?.ok) {
     setActiveCard(index);
-    setStatus(t('cardHighlighted', [(index + 1).toString()]));
+    setStatus(t('cardHighlighted', { index: index + 1 }));
   } else {
-    setStatus(t('cardLocateFailed', [(index + 1).toString()]));
+    setStatus(t('cardLocateFailed', { index: index + 1 }));
   }
 }
 
@@ -446,10 +449,10 @@ function renderMeta(meta: Readonly<PageMeta>, used: ExtractedTextVersion): void 
   $('meta').hidden = false;
   $('meta-title').textContent = meta.title;
   $('meta-url').textContent = meta.url;
-  $('meta-raw-len').textContent = t('metaCharsCount', [meta.rawTextLength.toString()]);
-  $('meta-read-len').textContent = t('metaCharsCount', [meta.readabilityTextLength.toString()]);
+  $('meta-raw-len').textContent = t('metaCharsCount', { count: meta.rawTextLength });
+  $('meta-read-len').textContent = t('metaCharsCount', { count: meta.readabilityTextLength });
   $('meta-used').textContent = used === 'readability' ? t('metaUsedReadability') : t('metaUsedRaw');
-  $('meta-selected-len').textContent = t('metaCharsCount', [quality.selectedTextLength.toString()]);
+  $('meta-selected-len').textContent = t('metaCharsCount', { count: quality.selectedTextLength });
   if (quality.level === 'warn') {
     qualityEl.hidden = false;
     qualityEl.className = `meta-quality ${quality.level}`;
@@ -489,21 +492,21 @@ function renderPageState(state: PageState): void {
   setCurrentHasSavedResults(true);
   const analyzedAt = new Date(state.analyzedAt).toLocaleTimeString();
   setStatus(
-    t('statusRestoredSummary', [
-      state.results.length.toString(),
-      countDomHits(state.results).toString(),
+    t('statusRestoredSummary', {
+      cardCount: state.results.length,
+      domHits: countDomHits(state.results),
       analyzedAt,
-    ]),
+    }),
   );
 }
 
 function renderCompletedPageState(state: PageState): void {
   renderPageState(state);
   setStatus(
-    t('statusCompleteSummary', [
-      state.results.length.toString(),
-      countDomHits(state.results).toString(),
-    ]),
+    t('statusCompleteSummary', {
+      cardCount: state.results.length,
+      domHits: countDomHits(state.results),
+    }),
   );
 }
 
@@ -545,7 +548,7 @@ async function refreshCurrentPage(): Promise<void> {
         showStaleCacheBanner();
         setStatus(
           page.title
-            ? t('statusPageContentChangedTitled', [page.title])
+            ? t('statusPageContentChangedTitled', { title: page.title })
             : t('statusPageContentChanged'),
         );
         return;
@@ -555,16 +558,16 @@ async function refreshCurrentPage(): Promise<void> {
     }
     clearRenderedPage();
     if (runningPageKeys.has(page.key)) {
-      setStatus(page.title ? t('statusReadingTitled', [page.title]) : t('statusReading'));
+      setStatus(page.title ? t('statusReadingTitled', { title: page.title }) : t('statusReading'));
       return;
     }
-    setStatus(page.title ? t('statusWaitingTitled', [page.title]) : t('statusWaiting'));
+    setStatus(page.title ? t('statusWaitingTitled', { title: page.title }) : t('statusWaiting'));
   } catch (error: unknown) {
     if (version !== refreshVersion) return;
     currentPage = null;
     clearRenderedPage();
     const msg = error instanceof Error ? error.message : 'unknown error';
-    setStatus(t('errorPrefix', [msg]));
+    setStatus(t('errorPrefix', { error: msg }));
   }
 }
 
@@ -608,7 +611,7 @@ async function locateAll(
   for (const [index, result] of settled.entries()) {
     if (result.status === 'rejected') {
       throw new Error(
-        t('cardLocateError', [(index + 1).toString(), errorMessage(result.reason)]),
+        t('cardLocateError', { index: index + 1, error: errorMessage(result.reason) }),
       );
     }
     results.push(result.value);
@@ -681,13 +684,13 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     })) as AnalyzeResponse;
 
     if (!resp.ok) {
-      if (canRenderAnalysis(version, page)) setStatus(t('errorPrefix', [resp.error]));
+      if (canRenderAnalysis(version, page)) setStatus(t('errorPrefix', { error: resp.error }));
       return;
     }
 
     if (canRenderAnalysis(version, page)) {
       renderMeta(meta, resp.usedText);
-      setStatus(t('statusFoundLocating', [resp.cards.length.toString()]));
+      setStatus(t('statusFoundLocating', { count: resp.cards.length }));
     }
 
     const results = await locateAll(page, resp.cards);
@@ -705,7 +708,7 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
-    if (!page || canRenderAnalysis(version, page)) setStatus(t('errorPrefix', [msg]));
+    if (!page || canRenderAnalysis(version, page)) setStatus(t('errorPrefix', { error: msg }));
   } finally {
     if (page) setPageBusy(page.key, false);
   }
@@ -761,7 +764,7 @@ async function init(): Promise<void> {
       const removed = await clearAllPageStates(pageStateStorage);
       hideStaleCacheBanner();
       clearRenderedPage();
-      setStatus(t('statusCacheClearedAll', [removed.toString()]));
+      setStatus(t('statusCacheClearedAll', { count: removed }));
       return removed;
     },
   });

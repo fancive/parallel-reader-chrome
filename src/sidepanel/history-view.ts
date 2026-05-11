@@ -42,7 +42,7 @@ function renderHistoryItem(
   item.appendChild(urlEl);
 
   const stamp = formatAnalyzedAt(entry.analyzedAt);
-  const cardCountText = t('historyCardsCount', [entry.cardCount.toString()]);
+  const cardCountText = t('historyCardsCount', { count: entry.cardCount });
   const metaEl = makeMetaLine(`${stamp} · ${cardCountText}`, 'history-meta');
   item.appendChild(metaEl);
 
