@@ -44,6 +44,23 @@
           <input id="debug-mode" type="checkbox" />
           <span data-i18n="settingsDebugLabel"></span>
         </label>
+        <details id="diagnostics-panel" class="diagnostics-panel" hidden>
+          <summary data-i18n="diagnosticsSummary"></summary>
+          <dl class="diagnostics-state">
+            <dt data-i18n="diagnosticsLabelPageKey"></dt>
+            <dd id="diag-page-key">—</dd>
+            <dt data-i18n="diagnosticsLabelInflight"></dt>
+            <dd id="diag-inflight">—</dd>
+            <dt data-i18n="diagnosticsLabelLastState"></dt>
+            <dd id="diag-last-state">—</dd>
+          </dl>
+          <div class="diagnostics-actions">
+            <button id="diag-refresh" type="button" data-i18n="diagnosticsBtnRefresh"></button>
+            <button id="diag-copy" type="button" data-i18n="diagnosticsBtnCopy"></button>
+            <button id="diag-clear" type="button" data-i18n="diagnosticsBtnClear"></button>
+          </div>
+          <pre id="diag-log" class="diagnostics-log" aria-live="polite"></pre>
+        </details>
       </fieldset>
       <p class="settings-note" data-i18n="settingsLocalModeNote"></p>
       <button id="history-open" class="settings-secondary" type="button" data-i18n="settingsBtnHistory"></button>

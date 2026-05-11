@@ -3,6 +3,10 @@ import { CardSchema } from './types';
 
 export const INFLIGHT_KEY_PREFIX = 'parallel-reader-inflight:';
 export const ANALYSIS_DONE_MSG = 'analysis-done' as const;
+// If an inflight entry is older than this, treat it as orphaned (e.g. service
+// worker was evicted mid-analyze) and drop it. 5 minutes covers the worst-case
+// slow-thinking Doubao response with margin; anything older is junk.
+export const INFLIGHT_TTL_MS = 5 * 60 * 1000;
 
 export function inflightStorageKey(pageKey: string): string {
   return `${INFLIGHT_KEY_PREFIX}${pageKey}`;
@@ -64,6 +68,7 @@ export async function setInflight(
 export async function getInflight(
   storage: chrome.storage.StorageArea,
   pageKey: string,
+  now: number = Date.now(),
 ): Promise<InflightEntry | null> {
   const key = inflightStorageKey(pageKey);
   const stored = (await storage.get(key)) as StorageRecord;
@@ -71,6 +76,12 @@ export async function getInflight(
   if (raw === undefined) return null;
   const parsed = InflightEntrySchema.safeParse(raw);
   if (!parsed.success) {
+    await storage.remove(key);
+    return null;
+  }
+  if (now - parsed.data.startedAt > INFLIGHT_TTL_MS) {
+    // Orphan: e.g. service worker evicted mid-analyze. Drop it so the next
+    // analyze can proceed and the UI doesn't sit on a stale "reading" status.
     await storage.remove(key);
     return null;
   }

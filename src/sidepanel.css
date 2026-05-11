@@ -899,3 +899,48 @@ body.debug-mode .meta-quality.debug-only:not([hidden]) {
     align-items: start;
   }
 }
+
+.diagnostics-panel {
+  margin-top: 8px;
+  border: 1px solid var(--border-soft, #d0d0d0);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.diagnostics-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.diagnostics-state {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 8px;
+  margin: 8px 0;
+}
+.diagnostics-state dt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.diagnostics-state dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diagnostics-actions {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+.diagnostics-log {
+  max-height: 240px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: var(--surface-muted, #f6f6f6);
+  padding: 6px 8px;
+  border-radius: 4px;
+  white-space: pre;
+  margin: 0;
+}

@@ -7,7 +7,7 @@ import {
 } from './shared/analyze-inflight';
 import { selectExtractedTextVersion } from './shared/extraction-quality';
 import { t } from './shared/i18n';
-import { logWarn } from './shared/logger';
+import { logTrace, logWarn } from './shared/logger';
 import { buildPendingAnalyzeRequest } from './shared/pending-analyze';
 import { callProvider } from './shared/provider';
 import {
@@ -130,6 +130,7 @@ async function broadcastAnalysisDone(pageKey: string, tabId: number): Promise<vo
 
 async function handleAnalyze(req: AnalyzeRequest): Promise<AnalyzeResponse> {
   const startedAt = Date.now();
+  logTrace('bg:analyze:start', { pageKey: req.pageKey, tabId: req.tabId });
   await setInflight(inflightStorage, {
     phase: 'analyzing',
     pageKey: req.pageKey,
@@ -141,6 +142,7 @@ async function handleAnalyze(req: AnalyzeRequest): Promise<AnalyzeResponse> {
     const usedText = selectExtractedTextVersion(req.readabilityText.length);
     const text = usedText === 'readability' ? req.readabilityText : req.rawText;
     if (!text.trim()) {
+      logTrace('bg:analyze:no-text', { pageKey: req.pageKey });
       await clearInflight(inflightStorage, req.pageKey);
       return { ok: false, error: t('pageNoReadableText') };
     }
@@ -160,11 +162,13 @@ async function handleAnalyze(req: AnalyzeRequest): Promise<AnalyzeResponse> {
       },
     };
     await setInflight(inflightStorage, locatingEntry);
+    logTrace('bg:analyze:locating', { pageKey: req.pageKey, cardCount: cards.length, usedText });
     void broadcastAnalysisDone(req.pageKey, req.tabId);
     return { ok: true, cards, usedText };
   } catch (error: unknown) {
     await clearInflight(inflightStorage, req.pageKey);
     const message = error instanceof Error ? error.message : 'unknown error';
+    logTrace('bg:analyze:error', { pageKey: req.pageKey, error: message });
     return { ok: false, error: message };
   }
 }

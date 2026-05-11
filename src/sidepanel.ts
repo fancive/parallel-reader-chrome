@@ -13,6 +13,7 @@ import {
 } from './shared/extraction-quality';
 import { computeContentFingerprint } from './shared/fingerprint';
 import { applyI18n, setLocaleOverride, t } from './shared/i18n';
+import { logTrace } from './shared/logger';
 import { contentScriptInjectionHint } from './shared/page-support';
 import {
   type AnalyzeResponse,
@@ -29,6 +30,7 @@ import {
 } from './shared/types';
 import { renderCard, setActiveCard } from './sidepanel/card-view';
 import { debounce, runWithConcurrency } from './sidepanel/concurrency';
+import { applyDiagnosticsVisibility, bindDiagnostics } from './sidepanel/diagnostics-view';
 import { $, errorMessage } from './sidepanel/dom';
 import {
   clearAllHistory,
@@ -54,6 +56,7 @@ import {
   savePageState as saveStoredPageState,
 } from './sidepanel/page-cache';
 import { type PageIdentity, pageIdentityFromTab } from './sidepanel/page-identity';
+import { decideRefreshAction } from './sidepanel/refresh-decision';
 import {
   bindSettingsForm,
   loadSettings,
@@ -127,6 +130,7 @@ function applyDebugMode(enabled: boolean): void {
   $<HTMLInputElement>('debug-mode').checked = enabled;
   const stats = $<HTMLDetailsElement>('stats');
   if (enabled && !stats.hidden) stats.open = true;
+  applyDiagnosticsVisibility(enabled);
 }
 
 async function loadTheme(): Promise<Theme> {
@@ -550,14 +554,29 @@ async function refreshCurrentPage(): Promise<void> {
     const page = await activePage();
     currentPage = page;
     hideStaleCacheBanner();
+    logTrace('panel:refresh:start', { pageKey: page.key, panelTabId, version });
     const cached = await loadPageState(page);
     if (version !== refreshVersion) return;
-    if (cached) {
-      const live = cached.fingerprint ? await liveFingerprint(page) : null;
-      if (version !== refreshVersion) return;
-      if (live && live !== cached.fingerprint) {
+    const live = cached?.fingerprint ? await liveFingerprint(page) : null;
+    if (version !== refreshVersion) return;
+    const inflight = cached ? null : await getInflight(inflightStorage, page.key);
+    if (version !== refreshVersion) return;
+    const decision = decideRefreshAction({
+      cached,
+      liveFingerprint: live,
+      inflight,
+      runningLocally: runningPageKeys.has(page.key),
+      currentTabId: page.tabId,
+    });
+    switch (decision.kind) {
+      case 'show-stale': {
         clearRenderedPage();
         showStaleCacheBanner();
+        logTrace('panel:refresh:stale', {
+          pageKey: page.key,
+          cachedFp: decision.cachedFingerprint.slice(0, 8),
+          liveFp: decision.liveFingerprint.slice(0, 8),
+        });
         setStatus(
           page.title
             ? t('statusPageContentChangedTitled', { title: page.title })
@@ -565,18 +584,38 @@ async function refreshCurrentPage(): Promise<void> {
         );
         return;
       }
-      renderPageState(cached);
-      return;
-    }
-    clearRenderedPage();
-    const inflight = await getInflight(inflightStorage, page.key);
-    if (version !== refreshVersion) return;
-    if (inflight?.phase === 'locating' && !runningPageKeys.has(page.key)) {
-      // Background completed LLM call but sidepanel was unloaded mid-analyze.
-      // Claim the slot synchronously here so a concurrent refresh cannot also
-      // enter resumeFromInflight; resumeFromInflight itself will not re-add.
-      setPageBusy(page.key, true);
-      void resumeFromInflight(page, inflight);
+      case 'render-cached': {
+        logTrace('panel:refresh:render-cached', {
+          pageKey: page.key,
+          analyzedAt: decision.state.analyzedAt,
+          cardCount: decision.state.results.length,
+          fingerprintPresent: Boolean(decision.state.fingerprint),
+        });
+        renderPageState(decision.state);
+        return;
+      }
+      case 'resume-inflight': {
+        clearRenderedPage();
+        // Claim the busy slot synchronously here so a concurrent refresh
+        // cannot also enter resumeFromInflight; resumeFromInflight itself will
+        // not re-add.
+        logTrace('panel:refresh:resume-from-inflight', {
+          pageKey: page.key,
+          cardCount: decision.entry.cards.length,
+        });
+        setPageBusy(page.key, true);
+        void resumeFromInflight(page, decision.entry);
+        break;
+      }
+      case 'idle': {
+        clearRenderedPage();
+        logTrace('panel:refresh:idle', {
+          pageKey: page.key,
+          inflightPhase: inflight?.phase ?? null,
+          runningLocally: runningPageKeys.has(page.key),
+        });
+        break;
+      }
     }
     const idle = selectIdleStatus({
       inflight,
@@ -686,6 +725,7 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     currentPage = page;
     const replacingExistingResults = Boolean(await loadPageState(page));
     setPageBusy(page.key, true);
+    logTrace('panel:analyze:start', { pageKey: page.key, replacing: replacingExistingResults, forced: Boolean(forced) });
     if (!replacingExistingResults) clearRenderedPage();
 
     if (canRenderAnalysis(version, page)) {
@@ -731,11 +771,13 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     });
     await savePageState(state);
     savedPageState = true;
+    logTrace('panel:analyze:saved', { pageKey: page.key, cardCount: results.length, fingerprint: fingerprint.slice(0, 8) });
     if (canRenderAnalysis(version, page)) {
       renderCompletedPageState(state);
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
+    if (page) logTrace('panel:analyze:error', { pageKey: page.key, error: msg });
     if (!page || canRenderAnalysis(version, page)) setStatus(t('errorPrefix', { error: msg }));
   } finally {
     if (page) {
@@ -777,11 +819,13 @@ async function resumeFromInflight(
     });
     await savePageState(state);
     savedPageState = true;
+    logTrace('panel:resume:saved', { pageKey: page.key, cardCount: results.length });
     if (canRenderAnalysis(version, page)) {
       renderCompletedPageState(state);
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'unknown error';
+    logTrace('panel:resume:error', { pageKey: page.key, error: msg });
     if (canRenderAnalysis(version, page)) setStatus(t('errorPrefix', { error: msg }));
   } finally {
     setPageBusy(page.key, false);
@@ -817,6 +861,7 @@ async function consumePendingAnalyze(): Promise<PendingAnalyzeRequest | null> {
 }
 
 async function init(): Promise<void> {
+  logTrace('panel:mount', { panelTabId, href: window.location.search });
   const [settings, debugMode, theme] = await Promise.all([
     loadSettings(),
     loadDebugMode(),
@@ -846,6 +891,27 @@ async function init(): Promise<void> {
   bindTheme(theme);
   bindDebugMode(debugMode);
   bindHistoryView();
+  bindDiagnostics({
+    setStatus,
+    readSnapshot: async () => {
+      const page = currentPage;
+      const pageKey = page?.key ?? '';
+      const inflight = page ? await getInflight(inflightStorage, page.key) : null;
+      const lastState = page ? await loadPageState(page) : null;
+      return {
+        ts: Date.now(),
+        pageKey,
+        inflight,
+        lastState: lastState ? {
+          analyzedAt: lastState.analyzedAt,
+          cachedAt: lastState.cachedAt,
+          fingerprint: lastState.fingerprint,
+          cardCount: lastState.results.length,
+          meta: lastState.meta,
+        } : null,
+      };
+    },
+  });
   updateAnalyzeButton();
   void syncZoomFromActiveTab();
 
@@ -899,7 +965,21 @@ async function init(): Promise<void> {
     if (currentPage) {
       const pageStateKey = pageStateStorageKey(currentPage.key);
       const inflightKey = inflightStorageKey(currentPage.key);
-      if (pageStateKey in changes || inflightKey in changes) {
+      if (pageStateKey in changes) {
+        const change = changes[pageStateKey];
+        logTrace('panel:storage:page-state', {
+          pageKey: currentPage.key,
+          hadOld: change?.oldValue !== undefined,
+          hasNew: change?.newValue !== undefined,
+        });
+        debouncedRefresh();
+      } else if (inflightKey in changes) {
+        const change = changes[inflightKey];
+        logTrace('panel:storage:inflight', {
+          pageKey: currentPage.key,
+          hadOld: change?.oldValue !== undefined,
+          hasNew: change?.newValue !== undefined,
+        });
         debouncedRefresh();
       }
     }
@@ -912,6 +992,12 @@ async function init(): Promise<void> {
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     const trackedTabId = currentPage?.tabId ?? panelTabId;
     if (trackedTabId !== tabId) return;
+    logTrace('panel:tab-updated', {
+      tabId,
+      status: changeInfo.status ?? null,
+      urlChanged: Boolean(changeInfo.url),
+      newUrl: changeInfo.url ?? null,
+    });
     if (changeInfo.url || changeInfo.status === 'loading' || changeInfo.status === 'complete') {
       invalidatePendingRender();
     }

@@ -768,6 +768,50 @@ async function main() {
     assert(providerRequests.length === requestsBefore, 'restore path unexpectedly called provider again');
   });
 
+  await record(
+    'completed cards survive a tab-switch round trip without re-calling provider',
+    ['risk:regression', 'risk:resource_lifecycle', 'risk:wiring'],
+    async () => {
+      providerMode = 'success';
+      providerDelayMs = 0;
+      providerRequests.length = 0;
+      const switchSurviveUrl = `${baseUrl}?case=switch-survive`;
+      await openArticleInFixtureTab(switchSurviveUrl);
+      const fixtureTabId = await tabIdForUrl(switchSurviveUrl);
+      await enableSidePanelForTab(fixtureTabId);
+      await waitForTabScopedSidePanelPath(fixtureTabId);
+      await openSidePanelPage(fixtureTabId);
+      await configureFakeProvider();
+      await triggerAnalysisWithoutChangingActiveTab();
+      await waitForCompletedCards(2);
+      const requestsBefore = providerRequests.length;
+      assert(requestsBefore === 1, `expected exactly 1 provider call before switch, got ${requestsBefore}`);
+
+      // Open another tab and bring it to front; this is the canonical
+      // "switch tab" gesture. Then re-mount the side panel for the fixture tab
+      // — Chrome treats the prior side panel page as gone once we close it.
+      const otherTab = await context.newPage();
+      await otherTab.goto(otherUrl);
+      await otherTab.bringToFront();
+      await delay(500);
+      await fixturePage.bringToFront();
+      await openSidePanelPage(fixtureTabId);
+
+      await sidePage.waitForFunction(
+        () => document.querySelector('#status')?.textContent?.includes('已恢复当前页结果'),
+        null,
+        { timeout: 5000 },
+      );
+      const cardCount = await sidePage.locator('.card').count();
+      assert(cardCount === 2, `expected 2 cards to survive tab switch, got ${cardCount}`);
+      assert(
+        providerRequests.length === requestsBefore,
+        `tab-switch round trip unexpectedly re-called provider (${providerRequests.length - requestsBefore} extra)`,
+      );
+      await otherTab.close();
+    },
+  );
+
   await record('provider failure preserves existing rendered cards', ['risk:failure_path', 'risk:regression'], async () => {
     providerMode = 'error';
     providerDelayMs = 0;
@@ -803,6 +847,166 @@ async function main() {
     await waitForCompletedCards(2);
     providerDelayMs = 0;
   });
+
+  // Hardest case: the side panel is destroyed while the provider call is
+  // still in flight. Background completes the call and writes a `locating`
+  // inflight marker; a fresh side panel mount must pick that up and finish
+  // the locate phase WITHOUT re-calling the provider.
+  await record(
+    'side panel unloaded mid-analyze resumes via inflight on remount',
+    ['risk:regression', 'risk:resource_lifecycle', 'risk:wiring', 'risk:failure_path'],
+    async () => {
+      providerMode = 'success';
+      providerDelayMs = 2500;
+      providerRequests.length = 0;
+      const resumeUrl = `${baseUrl}?case=resume-from-inflight`;
+      await openArticleInFixtureTab(resumeUrl);
+      const fixtureTabId = await tabIdForUrl(resumeUrl);
+      await enableSidePanelForTab(fixtureTabId);
+      await waitForTabScopedSidePanelPath(fixtureTabId);
+      await openSidePanelPage(fixtureTabId);
+      await configureFakeProvider();
+      await triggerAnalysisWithoutChangingActiveTab();
+
+      // Close the side panel page WHILE the provider call is still pending.
+      // This is the deterministic stand-in for Chrome's automatic unload on
+      // tab switch — `sidePage.close()` drops the JS context just like the
+      // real unload would, so background's sendResponse will fall on a
+      // closed receiver.
+      await waitUntil(
+        () => providerRequests.length === 1,
+        'provider was not called before side panel close',
+        5000,
+      );
+      assert(!sidePage.isClosed(), 'side panel closed before we could close it ourselves');
+      await sidePage.close();
+      sidePage = undefined;
+
+      // Wait until background finishes the (delayed) provider call. The
+      // inflight marker should have advanced to phase=locating by then.
+      const sw = findExtensionServiceWorker();
+      assert(sw, 'service worker not available');
+      await waitUntil(
+        async () => {
+          const stored = await sw.evaluate(async (key) => {
+            const session = chrome.storage.session;
+            if (!session) return null;
+            const all = await session.get(key);
+            return all[key] ?? null;
+          }, `parallel-reader-inflight:${resumeUrl}`);
+          return stored?.phase === 'locating';
+        },
+        'background never wrote a locating inflight marker',
+        providerDelayMs + 5000,
+      );
+
+      // Re-mount the side panel. resumeFromInflight should finish locate and
+      // persist cards using the cached LLM output — no second provider call.
+      await openSidePanelPage(fixtureTabId);
+      await waitForCompletedCards(2);
+      assert(
+        providerRequests.length === 1,
+        `resume path unexpectedly re-called provider (${providerRequests.length - 1} extra request(s))`,
+      );
+
+      // After resume, the inflight marker should be cleared.
+      const afterInflight = await sw.evaluate(async (key) => {
+        const session = chrome.storage.session;
+        if (!session) return null;
+        const all = await session.get(key);
+        return all[key] ?? null;
+      }, `parallel-reader-inflight:${resumeUrl}`);
+      assert(afterInflight === null, `inflight marker should be cleared after resume, got: ${JSON.stringify(afterInflight)}`);
+
+      providerDelayMs = 0;
+    },
+  );
+
+  // Variant: remount happens BEFORE background advances to locating. The fresh
+  // panel should see phase=analyzing, do nothing (idle), then react to the
+  // storage.onChanged event when background finally writes locating.
+  await record(
+    'side panel remount during analyzing phase still completes via storage.onChanged',
+    ['risk:regression', 'risk:resource_lifecycle', 'risk:wiring'],
+    async () => {
+      providerMode = 'success';
+      providerDelayMs = 3000;
+      providerRequests.length = 0;
+      const analyzingUrl = `${baseUrl}?case=remount-during-analyzing`;
+      await openArticleInFixtureTab(analyzingUrl);
+      const fixtureTabId = await tabIdForUrl(analyzingUrl);
+      await enableSidePanelForTab(fixtureTabId);
+      await waitForTabScopedSidePanelPath(fixtureTabId);
+      await openSidePanelPage(fixtureTabId);
+      await configureFakeProvider();
+      await triggerAnalysisWithoutChangingActiveTab();
+      await waitUntil(
+        () => providerRequests.length === 1,
+        'background did not start the provider call',
+        3000,
+      );
+
+      // Close immediately — background is still mid-call, so inflight is
+      // phase=analyzing (no cards yet).
+      assert(!sidePage.isClosed(), 'panel closed before we could close it');
+      await sidePage.close();
+      sidePage = undefined;
+
+      // Remount NOW, while background is still chewing on the LLM response.
+      await openSidePanelPage(fixtureTabId);
+
+      // The new panel sees phase=analyzing and should sit idle. Then when
+      // background writes phase=locating, storage.onChanged triggers refresh
+      // and resumeFromInflight takes over. End state: cards within ~5s, no
+      // second provider call.
+      await waitForCompletedCards(2);
+      assert(
+        providerRequests.length === 1,
+        `remount-during-analyzing path re-called provider (${providerRequests.length - 1} extra)`,
+      );
+      providerDelayMs = 0;
+    },
+  );
+
+  // Variant: do NOT close the side panel page — just bring another tab to
+  // front. The cards in the still-alive side panel must remain rendered.
+  // Catches a regression where some state listener could clear cards when the
+  // tab loses visibility.
+  await record(
+    'completed cards stay rendered when another tab is brought to front (no panel close)',
+    ['risk:regression', 'risk:wiring'],
+    async () => {
+      providerMode = 'success';
+      providerDelayMs = 0;
+      providerRequests.length = 0;
+      const stayUrl = `${baseUrl}?case=stay-rendered`;
+      await openArticleInFixtureTab(stayUrl);
+      const fixtureTabId = await tabIdForUrl(stayUrl);
+      await enableSidePanelForTab(fixtureTabId);
+      await waitForTabScopedSidePanelPath(fixtureTabId);
+      await openSidePanelPage(fixtureTabId);
+      await configureFakeProvider();
+      await triggerAnalysisWithoutChangingActiveTab();
+      await waitForCompletedCards(2);
+
+      // Bring another tab forward without closing/re-opening the side panel.
+      const otherTab = await context.newPage();
+      await otherTab.goto(otherUrl);
+      await otherTab.bringToFront();
+      await delay(750);
+      await fixturePage.bringToFront();
+
+      // sidePage is still the same instance — assert the rendered DOM didn't
+      // get wiped.
+      const cardCount = await sidePage.locator('.card').count();
+      assert(cardCount === 2, `cards disappeared while tab was backgrounded; count=${cardCount}`);
+      assert(
+        providerRequests.length === 1,
+        `bringToFront round trip unexpectedly triggered a refresh provider call (${providerRequests.length - 1} extra)`,
+      );
+      await otherTab.close();
+    },
+  );
 
   // The pending-analyze message is what background's command handler (Alt+Shift+R)
   // emits to the side panel. Playwright cannot fire a real Chrome global shortcut,

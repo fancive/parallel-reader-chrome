@@ -69,10 +69,10 @@ test('round-trip set/get/clear for analyzing phase', async () => {
     tabId: 7,
     startedAt: 100,
   });
-  const got = await getInflight(storage, 'p1');
+  const got = await getInflight(storage, 'p1', 200);
   assert.deepEqual(got, { phase: 'analyzing', pageKey: 'p1', tabId: 7, startedAt: 100 });
   await clearInflight(storage, 'p1');
-  assert.equal(await getInflight(storage, 'p1'), null);
+  assert.equal(await getInflight(storage, 'p1', 200), null);
 });
 
 test('round-trip set/get for locating phase carries cards + meta', async () => {
@@ -87,7 +87,7 @@ test('round-trip set/get for locating phase carries cards + meta', async () => {
     meta: { title: 't', url: 'u', rawTextLength: 5, readabilityTextLength: 3 },
   };
   await setInflight(storage, entry);
-  const got = await getInflight(storage, 'p2');
+  const got = await getInflight(storage, 'p2', 300);
   assert.deepEqual(got, entry);
 });
 
@@ -95,8 +95,36 @@ test('replacing inflight for same pageKey overwrites', async () => {
   const storage = makeFakeStorage();
   await setInflight(storage, { phase: 'analyzing', pageKey: 'p3', tabId: 1, startedAt: 10 });
   await setInflight(storage, { phase: 'analyzing', pageKey: 'p3', tabId: 1, startedAt: 20 });
-  const got = await getInflight(storage, 'p3');
+  const got = await getInflight(storage, 'p3', 100);
   assert.equal(got.startedAt, 20);
+});
+
+test('getInflight drops entries older than INFLIGHT_TTL_MS and removes the key', async () => {
+  const { INFLIGHT_TTL_MS, inflightStorageKey: keyFn } = await import(pathToFileURL(out));
+  const storage = makeFakeStorage();
+  await setInflight(storage, {
+    phase: 'analyzing',
+    pageKey: 'p-stale',
+    tabId: 1,
+    startedAt: 1000,
+  });
+  const got = await getInflight(storage, 'p-stale', 1000 + INFLIGHT_TTL_MS + 1);
+  assert.equal(got, null);
+  assert.equal(storage.store.has(keyFn('p-stale')), false);
+});
+
+test('getInflight keeps entry exactly at the TTL boundary', async () => {
+  const { INFLIGHT_TTL_MS } = await import(pathToFileURL(out));
+  const storage = makeFakeStorage();
+  await setInflight(storage, {
+    phase: 'analyzing',
+    pageKey: 'p-edge',
+    tabId: 1,
+    startedAt: 0,
+  });
+  const got = await getInflight(storage, 'p-edge', INFLIGHT_TTL_MS);
+  assert.ok(got, 'entry exactly at TTL boundary should still be considered fresh');
+  assert.equal(got.startedAt, 0);
 });
 
 test('getInflight returns null and removes entry for malformed payload', async () => {
