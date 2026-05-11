@@ -14,7 +14,7 @@ export {
   inferPresetFromUrl,
 } from './presets';
 
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 180_000;
 
 const ANTHROPIC_TOOL_NAME = 'emit_cards';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -115,23 +115,34 @@ function appendIfMissing(base: string, suffix: string): string {
   return trimmed.endsWith(suffix) ? trimmed : trimmed + suffix;
 }
 
+function isDoubaoEndpoint(baseUrl: string): boolean {
+  const lower = baseUrl.toLowerCase();
+  return lower.includes('volces.com') || lower.includes('doubao');
+}
+
 /* ---------- OpenAI chat completions ---------- */
 
 const openAiHandler: FormatHandler = {
   build(system, user, settings) {
+    const body: Record<string, unknown> = {
+      model: settings.model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      stream: false,
+    };
+    // Doubao (ByteDance volcengine) thinking models otherwise spend minutes
+    // chain-of-thought-ing and blow past our timeout. Tell them to skip it.
+    if (isDoubaoEndpoint(settings.baseUrl)) {
+      body.thinking = { type: 'disabled' };
+    }
     return {
       url: appendIfMissing(settings.baseUrl, '/chat/completions'),
       headers: jsonHeaders(settings),
-      body: {
-        model: settings.model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-        stream: false,
-      },
+      body,
     };
   },
   parse(json) {

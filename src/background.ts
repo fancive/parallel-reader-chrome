@@ -1,3 +1,10 @@
+import {
+  ANALYSIS_DONE_MSG,
+  type AnalysisDoneMessage,
+  clearInflight,
+  type InflightLocating,
+  setInflight,
+} from './shared/analyze-inflight';
 import { selectExtractedTextVersion } from './shared/extraction-quality';
 import { t } from './shared/i18n';
 import { logWarn } from './shared/logger';
@@ -15,6 +22,7 @@ import {
 } from './shared/types';
 
 const pendingAnalyzeStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
+const inflightStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
 
 const SIDE_PANEL_PATH = 'sidepanel.html';
 const BADGE_CLEAR_MS = 5_000;
@@ -104,15 +112,58 @@ function openSidePanelForTab(tabId: number): Promise<void> {
   );
 }
 
+async function broadcastAnalysisDone(pageKey: string, tabId: number): Promise<void> {
+  const message: AnalysisDoneMessage = { type: ANALYSIS_DONE_MSG, pageKey, tabId };
+  try {
+    await chrome.runtime.sendMessage(message);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes('Receiving end does not exist') ||
+      msg.includes('Could not establish connection')
+    ) {
+      return;
+    }
+    logWarn('broadcast analysis-done', error);
+  }
+}
+
 async function handleAnalyze(req: AnalyzeRequest): Promise<AnalyzeResponse> {
+  const startedAt = Date.now();
+  await setInflight(inflightStorage, {
+    phase: 'analyzing',
+    pageKey: req.pageKey,
+    tabId: req.tabId,
+    startedAt,
+  });
   try {
     const settings = await loadSettings();
     const usedText = selectExtractedTextVersion(req.readabilityText.length);
     const text = usedText === 'readability' ? req.readabilityText : req.rawText;
-    if (!text.trim()) return { ok: false, error: t('pageNoReadableText') };
+    if (!text.trim()) {
+      await clearInflight(inflightStorage, req.pageKey);
+      return { ok: false, error: t('pageNoReadableText') };
+    }
     const cards = await callProvider(text, settings);
+    const locatingEntry: InflightLocating = {
+      phase: 'locating',
+      pageKey: req.pageKey,
+      tabId: req.tabId,
+      startedAt,
+      cards: [...cards],
+      usedText,
+      meta: {
+        title: req.title,
+        url: req.url,
+        rawTextLength: req.rawText.length,
+        readabilityTextLength: req.readabilityText.length,
+      },
+    };
+    await setInflight(inflightStorage, locatingEntry);
+    void broadcastAnalysisDone(req.pageKey, req.tabId);
     return { ok: true, cards, usedText };
   } catch (error: unknown) {
+    await clearInflight(inflightStorage, req.pageKey);
     const message = error instanceof Error ? error.message : 'unknown error';
     return { ok: false, error: message };
   }

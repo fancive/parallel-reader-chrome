@@ -86,6 +86,10 @@ export type AnalyzeRequest = {
   type: 'analyze';
   rawText: string;
   readabilityText: string;
+  pageKey: string;
+  tabId: number;
+  title: string;
+  url: string;
 };
 
 export type AnalyzeResponse =

@@ -1,4 +1,12 @@
 import {
+  ANALYSIS_DONE_MSG,
+  AnalysisDoneSchema,
+  clearInflight,
+  getInflight,
+  type InflightEntry,
+  inflightStorageKey,
+} from './shared/analyze-inflight';
+import {
   assessExtractionQuality,
   type ExtractedTextVersion,
   selectExtractedTextVersion,
@@ -32,6 +40,7 @@ import {
   sanitizeFilename,
 } from './sidepanel/history';
 import { renderHistoryList, triggerDownload } from './sidepanel/history-view';
+import { selectIdleStatus } from './sidepanel/idle-status';
 import { closeCardMenu, showCardMenu } from './sidepanel/menu';
 import {
   buildPageState,
@@ -41,6 +50,7 @@ import {
   loadPageState as loadStoredPageState,
   type PageMeta,
   type PageState,
+  pageStateStorageKey,
   savePageState as saveStoredPageState,
 } from './sidepanel/page-cache';
 import { type PageIdentity, pageIdentityFromTab } from './sidepanel/page-identity';
@@ -302,6 +312,8 @@ function fmtPct(hits: number, total: number): string {
 const pageStateStorage: chrome.storage.StorageArea = chrome.storage.local;
 const pendingAnalyzeStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
 const legacyPageStateStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
+const inflightStorage: chrome.storage.StorageArea = chrome.storage.session ?? chrome.storage.local;
+
 
 let currentPage: PageIdentity | null = null;
 let currentHasSavedResults = false;
@@ -557,11 +569,21 @@ async function refreshCurrentPage(): Promise<void> {
       return;
     }
     clearRenderedPage();
-    if (runningPageKeys.has(page.key)) {
-      setStatus(page.title ? t('statusReadingTitled', { title: page.title }) : t('statusReading'));
-      return;
+    const inflight = await getInflight(inflightStorage, page.key);
+    if (version !== refreshVersion) return;
+    if (inflight?.phase === 'locating' && !runningPageKeys.has(page.key)) {
+      // Background completed LLM call but sidepanel was unloaded mid-analyze.
+      // Claim the slot synchronously here so a concurrent refresh cannot also
+      // enter resumeFromInflight; resumeFromInflight itself will not re-add.
+      setPageBusy(page.key, true);
+      void resumeFromInflight(page, inflight);
     }
-    setStatus(page.title ? t('statusWaitingTitled', { title: page.title }) : t('statusWaiting'));
+    const idle = selectIdleStatus({
+      inflight,
+      runningLocally: runningPageKeys.has(page.key),
+      title: page.title,
+    });
+    setStatus(idle.title ? t(idle.messageKey, { title: idle.title }) : t(idle.messageKey));
   } catch (error: unknown) {
     if (version !== refreshVersion) return;
     currentPage = null;
@@ -653,6 +675,7 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
   if (forced && !noteNonce(forced.nonce, forced.ts)) return;
   const version = ++renderVersion;
   let page: PageIdentity | null = null;
+  let savedPageState = false;
 
   try {
     if (!(await ensureProviderReady())) return;
@@ -681,6 +704,10 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
       type: 'analyze',
       rawText: extracted.rawText,
       readabilityText: extracted.readabilityText,
+      pageKey: page.key,
+      tabId: page.tabId,
+      title: extracted.title,
+      url: extracted.url,
     })) as AnalyzeResponse;
 
     if (!resp.ok) {
@@ -703,6 +730,7 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
       now: Date.now(),
     });
     await savePageState(state);
+    savedPageState = true;
     if (canRenderAnalysis(version, page)) {
       renderCompletedPageState(state);
     }
@@ -710,7 +738,54 @@ async function runAnalysis(forced?: PendingAnalyzeRequest): Promise<void> {
     const msg = error instanceof Error ? error.message : 'unknown error';
     if (!page || canRenderAnalysis(version, page)) setStatus(t('errorPrefix', { error: msg }));
   } finally {
-    if (page) setPageBusy(page.key, false);
+    if (page) {
+      setPageBusy(page.key, false);
+      // Only clear inflight when this run actually produced a saved PageState.
+      // On error we leave the marker so background's own completion (or a
+      // future resumeFromInflight) can still drive the recovery path.
+      if (savedPageState) await clearInflight(inflightStorage, page.key);
+    }
+  }
+}
+
+async function resumeFromInflight(
+  page: Readonly<PageIdentity>,
+  inflight: Readonly<InflightEntry>,
+): Promise<void> {
+  // Caller in refreshCurrentPage already claimed the busy slot synchronously.
+  if (inflight.phase !== 'locating') {
+    setPageBusy(page.key, false);
+    return;
+  }
+  const version = ++renderVersion;
+  let savedPageState = false;
+  try {
+    if (canRenderAnalysis(version, page)) {
+      renderMeta(inflight.meta, inflight.usedText);
+      setStatus(t('statusFoundLocating', { count: inflight.cards.length }));
+    }
+    const results = await locateAll(page, inflight.cards);
+    // Fingerprint left empty: content script may not be reachable here and the
+    // empty sentinel suppresses the mismatch check until the next full analyze.
+    const state: PageState = buildPageState({
+      page,
+      meta: inflight.meta,
+      usedText: inflight.usedText,
+      results,
+      fingerprint: '',
+      now: Date.now(),
+    });
+    await savePageState(state);
+    savedPageState = true;
+    if (canRenderAnalysis(version, page)) {
+      renderCompletedPageState(state);
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'unknown error';
+    if (canRenderAnalysis(version, page)) setStatus(t('errorPrefix', { error: msg }));
+  } finally {
+    setPageBusy(page.key, false);
+    if (savedPageState) await clearInflight(inflightStorage, page.key);
   }
 }
 
@@ -804,6 +879,14 @@ async function init(): Promise<void> {
       void runAnalysis(parsed.data);
       return false;
     }
+    if (m.type === ANALYSIS_DONE_MSG) {
+      const parsed = AnalysisDoneSchema.safeParse(m);
+      if (!parsed.success) return false;
+      if (panelTabId !== null && parsed.data.tabId !== panelTabId) return false;
+      if (currentPage && currentPage.key !== parsed.data.pageKey) return false;
+      debouncedRefresh();
+      return false;
+    }
     return false;
   });
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -812,6 +895,13 @@ async function init(): Promise<void> {
       void consumePendingAnalyze().then((req) => {
         if (req) void runAnalysis(req);
       });
+    }
+    if (currentPage) {
+      const pageStateKey = pageStateStorageKey(currentPage.key);
+      const inflightKey = inflightStorageKey(currentPage.key);
+      if (pageStateKey in changes || inflightKey in changes) {
+        debouncedRefresh();
+      }
     }
   });
   chrome.tabs.onActivated.addListener(() => {
